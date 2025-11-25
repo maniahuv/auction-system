@@ -1,7 +1,7 @@
 #include "server.h"
 #include "state.h"
 
-
+// Helper: Tim user theo socket fd
 UserState* get_user_by_fd(int fd) {
     for (int i = 0; i < MAX_USERS; i++) {
         if (users[i].fd == fd) return &users[i];
@@ -9,6 +9,7 @@ UserState* get_user_by_fd(int fd) {
     return NULL;
 }
 
+// Xu ly dang nhap
 char* handle_login(int fd, cJSON *json) {
     char *user = (char*)get_json_string(json, "user");
     char *pass = (char*)get_json_string(json, "pass");
@@ -36,6 +37,7 @@ char* handle_login(int fd, cJSON *json) {
     }
 }
 
+// Xu ly chat dau gia
 char* handle_bid(int fd, cJSON *json) {
     UserState *u = get_user_by_fd(fd);
     if (!u || !u->is_logged_in) {
@@ -46,6 +48,7 @@ char* handle_bid(int fd, cJSON *json) {
     if (!get_json_int(json, "amount", &amount)) {
          return create_error_response(ERR_INVALID_MESSAGE, "Missing amount");
     }
+
 
     return create_ok_response();
 }

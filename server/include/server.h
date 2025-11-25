@@ -8,7 +8,7 @@
 #include <unistd.h> 
 #include <errno.h>  
 
-// Các thu vien Networking
+// Cac thu vien Networking
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
