@@ -37,6 +37,50 @@ void clear_user(int fd) {
     }
 }
 
+void check_auctions() {
+    time_t now = time(NULL);
+    
+    for (int i = 0; i < MAX_ROOMS; i++) {
+        RoomState *r = &rooms[i];
+        
+        // Chỉ kiểm tra phòng đang active và đã bắt đầu đếm giờ (end_time > 0)
+        if (r->is_active && r->end_time > 0) {
+            
+            // Nếu đã qua giờ kết thúc
+            if (now >= r->end_time) {
+                printf("[Timer] Room %d ended!\n", r->room_id);
+                
+                // 1. Đóng phòng
+                r->is_active = 0;
+                
+                // 2. Tìm tên người thắng
+                char winner_name[50] = "No one";
+                if (r->highest_bidder_id != -1) {
+                    // Tìm user trong mảng users
+                    for(int u=0; u<MAX_USERS; u++) {
+                        if (users[u].fd == r->highest_bidder_id) {
+                            strcpy(winner_name, users[u].username);
+                            break;
+                        }
+                    }
+                }
+
+                // 3. Thông báo Broadcast: KẾT THÚC
+                cJSON *msg = cJSON_CreateObject();
+                cJSON_AddNumberToObject(msg, "type", S2C_AUCTION_ENDED); // 906
+                cJSON_AddNumberToObject(msg, "room_id", r->room_id);
+                cJSON_AddStringToObject(msg, "winner", winner_name);
+                cJSON_AddNumberToObject(msg, "final_price", r->current_price);
+                
+                char *s = cJSON_PrintUnformatted(msg);
+                broadcast_to_room(r->room_id, s); // Hàm này bạn đã viết ở bước trước
+                free(s);
+                cJSON_Delete(msg);
+            }
+        }
+    }
+}
+
 int main() {
     int listen_fd, new_fd; 
     struct sockaddr_in server_addr, client_addr;
@@ -87,10 +131,21 @@ int main() {
     // 4. Server Loop
     while (1) {
         read_fds = master_set; 
-        
-        if (select(fd_max + 1, &read_fds, NULL, NULL, NULL) == -1) {
+
+        struct timeval tv;
+        tv.tv_sec = 1;  // Chờ tối đa 1 giây
+        tv.tv_usec = 0;
+        int activity = select(fd_max + 1, &read_fds, NULL, NULL, &tv);
+        if (activity == -1) {
             perror("select");
-            exit(EXIT_FAILURE);
+            break;
+        }
+
+        check_auctions();
+
+        if (activity == 0) {
+            // Timeout 1s mà không có tin nhắn nào -> Loop tiếp để check_auctions chạy liên tục
+            continue;
         }
 		
         for (int i = 0; i <= fd_max; i++) {
@@ -131,6 +186,15 @@ int main() {
                                     break;
                                 case C2S_BID:
                                     response = handle_bid(i, json);
+                                    break;
+                                case C2S_CREATE_ROOM: 
+                                    response = handle_create_room(i, json);
+                                    break;
+                                case C2S_LIST_ROOMS: 
+                                    response = handle_list_rooms(i); 
+                                    break;
+                                case C2S_JOIN_ROOM: 
+                                    response = handle_join_room(i, json);
                                     break;
                                 default:
                                     response = create_error_response(ERR_UNKNOWN, "Unknown command type");

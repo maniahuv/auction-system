@@ -1,0 +1,8 @@
+.container { padding: 20px; font-family: sans-serif; max-width: 600px; margin: 0 auto; }
+input { padding: 10px; margin: 5px; width: 200px; }
+button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; margin: 5px; }
+button:hover { background: #0056b3; }
+.bid-btn { background: #dc3545; font-weight: bold; font-size: 1.2em; }
+.room-card { border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-radius: 5px; }
+.logs { background: #f8f9fa; padding: 15px; border: 1px solid #eee; height: 200px; overflow-y: scroll; margin-top: 20px; }
+.logs p { margin: 5px 0; border-bottom: 1px dashed #ccc; padding-bottom: 5px; }
