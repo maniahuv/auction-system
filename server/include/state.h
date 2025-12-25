@@ -2,6 +2,7 @@
 #define STATE_H
 
 #include "protocol.h"
+#include "time.h"
 
 #define MAX_USERS 50
 #define MAX_ROOMS 10

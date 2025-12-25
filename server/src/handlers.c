@@ -115,7 +115,7 @@ char *handle_create_room(int fd, cJSON *json) {
   if (!u || !u->is_logged_in)
     return create_error_response(ERR_UNKNOWN, "Login required");
 
-  char *title = get_json_string(json, "title");
+  const char *title = get_json_string(json, "title");
   int start_price = 0;
   get_json_int(json, "start_price", &start_price);
 
@@ -149,6 +149,7 @@ char *handle_create_room(int fd, cJSON *json) {
 
 // Hàm xử lý: LIST PHÒNG
 char *handle_list_rooms(int fd) {
+  (void)fd; // Unused parameter
   cJSON *resp = cJSON_CreateObject();
   cJSON_AddNumberToObject(resp, "type", S2C_ROOM_LIST);
   cJSON *arr = cJSON_CreateArray();
