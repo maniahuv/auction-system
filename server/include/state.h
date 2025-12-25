@@ -18,6 +18,7 @@ typedef struct {
   int room_id;
   char title[100];
   int current_price;
+  int buy_now_price;
   int highest_bidder_id; // ID (fd) cua nguoi tra gia cao nhat
   int is_active;
   time_t end_time;

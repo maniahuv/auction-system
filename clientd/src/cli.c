@@ -1,4 +1,4 @@
-#include "server.h" // Đã bao gồm cJSON.h, framing.h, protocol.h...
+#include "server.h" // Đã bao gồm cJSON.h, framing.h, protocol.h, json_util.h...
 #include <ctype.h>
 
 #define BUFFER_SIZE 4096
@@ -7,7 +7,7 @@
 void trim(char *s) {
     char *p = s;
     int l = strlen(p);
-    while(isspace(p[l - 1])) p[--l] = 0;
+    while(l > 0 && isspace(p[l - 1])) p[--l] = 0;
     while(*p && isspace(*p)) ++p, --l;
     memmove(s, p, l + 1);
 }
@@ -19,12 +19,25 @@ char* convert_command_to_json(char *input) {
 
     cJSON *req = cJSON_CreateObject();
     
-    // --- LỆNH: LOGIN user pass ---
-    if (strcmp(cmd, "login") == 0) {
+    // --- LỆNH: REGISTER user pass ---
+    if (strcmp(cmd, "register") == 0) {
         char *user = strtok(NULL, " ");
         char *pass = strtok(NULL, " ");
         if (user && pass) {
-            cJSON_AddNumberToObject(req, "type", C2S_LOGIN);
+            cJSON_AddNumberToObject(req, "type", C2S_REGISTER); // 101
+            cJSON_AddStringToObject(req, "user", user);
+            cJSON_AddStringToObject(req, "pass", pass);
+        } else {
+            printf(">> Sai cu phap! Dung: register <user> <pass>\n");
+            cJSON_Delete(req); return NULL;
+        }
+    }
+    // --- LỆNH: LOGIN user pass ---
+    else if (strcmp(cmd, "login") == 0) {
+        char *user = strtok(NULL, " ");
+        char *pass = strtok(NULL, " ");
+        if (user && pass) {
+            cJSON_AddNumberToObject(req, "type", C2S_LOGIN); // 102
             cJSON_AddStringToObject(req, "user", user);
             cJSON_AddStringToObject(req, "pass", pass);
         } else {
@@ -32,16 +45,18 @@ char* convert_command_to_json(char *input) {
             cJSON_Delete(req); return NULL;
         }
     }
-    // --- LỆNH: CREATE title price ---
+    // --- LỆNH: CREATE title start_price buy_now_price ---
     else if (strcmp(cmd, "create") == 0) {
         char *title = strtok(NULL, " ");
         char *price_str = strtok(NULL, " ");
-        if (title && price_str) {
-            cJSON_AddNumberToObject(req, "type", C2S_CREATE_ROOM);
+        char *buy_now_str = strtok(NULL, " ");
+        if (title && price_str && buy_now_str) {
+            cJSON_AddNumberToObject(req, "type", C2S_CREATE_ROOM); // 202
             cJSON_AddStringToObject(req, "title", title);
             cJSON_AddNumberToObject(req, "start_price", atoi(price_str));
+            cJSON_AddNumberToObject(req, "buy_now", atoi(buy_now_str));
         } else {
-            printf(">> Sai cu phap! Dung: create <title> <price>\n");
+            printf(">> Sai cu phap! Dung: create <title> <start_price> <buy_now_price>\n");
             cJSON_Delete(req); return NULL;
         }
     }
@@ -49,7 +64,7 @@ char* convert_command_to_json(char *input) {
     else if (strcmp(cmd, "join") == 0) {
         char *id_str = strtok(NULL, " ");
         if (id_str) {
-            cJSON_AddNumberToObject(req, "type", C2S_JOIN_ROOM);
+            cJSON_AddNumberToObject(req, "type", C2S_JOIN_ROOM); // 203
             cJSON_AddNumberToObject(req, "room_id", atoi(id_str));
         } else {
             printf(">> Sai cu phap! Dung: join <room_id>\n");
@@ -60,26 +75,28 @@ char* convert_command_to_json(char *input) {
     else if (strcmp(cmd, "bid") == 0) {
         char *price_str = strtok(NULL, " ");
         if (price_str) {
-            cJSON_AddNumberToObject(req, "type", C2S_BID);
+            cJSON_AddNumberToObject(req, "type", C2S_BID); // 401
             cJSON_AddNumberToObject(req, "price", atoi(price_str));
         } else {
             printf(">> Sai cu phap! Dung: bid <amount>\n");
             cJSON_Delete(req); return NULL;
         }
     }
+    // --- LỆNH: BUYNOW ---
+    else if (strcmp(cmd, "buynow") == 0) {
+        cJSON_AddNumberToObject(req, "type", C2S_BUY_NOW); // 402
+    }
     // --- LỆNH: LIST ---
     else if (strcmp(cmd, "list") == 0) {
-        cJSON_AddNumberToObject(req, "type", C2S_LIST_ROOMS);
+        cJSON_AddNumberToObject(req, "type", C2S_LIST_ROOMS); // 201
     }
     // --- HỖ TRỢ NHẬP JSON THÔ (Cho debug) ---
     else if (cmd[0] == '{') {
-        // Nếu nhập bắt đầu bằng {, gửi nguyên xi
-        cJSON_Delete(req); // Xóa object rỗng vừa tạo
-        return strdup(input); // Trả về chuỗi gốc (Lưu ý: input lúc này đã bị strtok cắt, nên cách này chỉ hoạt động nếu không có khoảng trắng trong JSON hoặc phải xử lý kỹ hơn. Nhưng với JSON đơn giản thì ok)
-        // Cách tốt hơn cho JSON thô là check trước khi strtok, nhưng để đơn giản ta ưu tiên lệnh CLI
+        cJSON_Delete(req);
+        return strdup(input);
     }
     else {
-        printf(">> Lenh khong hop le! (login, create, join, bid, list)\n");
+        printf(">> Lenh khong hop le! (register, login, create, join, bid, buynow, list)\n");
         cJSON_Delete(req);
         return NULL;
     }
@@ -101,6 +118,9 @@ void print_server_response(char *json_str) {
     get_json_int(json, "type", &type);
 
     switch (type) {
+        case S2C_GENERIC_OK: // Phản hồi thành công chung (dùng cho register, buynow...)
+            printf("\n[SUCCESS] Thao tac thanh cong: %s\n", get_json_string(json, "message"));
+            break;
         case S2C_LOGIN_SUCCESS:
             printf("\n[SUCCESS] Dang nhap thanh cong!\n");
             break;
@@ -114,7 +134,7 @@ void print_server_response(char *json_str) {
                 get_json_int(r, "id", &id);
                 get_json_int(r, "price", &price);
                 title = (char*)get_json_string(r, "title");
-                printf("#%d - %s (Gia: %d)\n", id, title, price);
+                printf("#%d - %s (Gia hien tai: %d)\n", id, title, price);
             }
             printf("-----------------------\n");
             break;
@@ -124,7 +144,7 @@ void print_server_response(char *json_str) {
                    (int)cJSON_GetNumberValue(cJSON_GetObjectItem(json, "current_price")));
             break;
         case S2C_AUCTION_ENDED:
-             printf("\n>>> [KET THUC] Nguoi thang: %s - Gia: %d\n", 
+             printf("\n>>> [KET THUC] Nguoi thang: %s - Gia cuoi: %d\n", 
                    get_json_string(json, "winner"), 
                    (int)cJSON_GetNumberValue(cJSON_GetObjectItem(json, "final_price")));
             break;
@@ -132,7 +152,6 @@ void print_server_response(char *json_str) {
              printf("\n[ERROR] %s\n", get_json_string(json, "message"));
              break;
         default:
-            // In raw nếu không phải các loại trên
             printf("SERVER: %s\n", json_str);
     }
     cJSON_Delete(json);
@@ -169,7 +188,7 @@ int main(int argc, char *argv[]) {
     }
 
     printf("=== AUCTION CLIENT (C VERSION) ===\n");
-    printf("Commands: login, create, list, join, bid\n");
+    printf("Commands: register, login, create, list, join, bid, buynow\n"); // Cập nhật danh sách lệnh
     printf("YOU> ");
     fflush(stdout);
 
@@ -187,9 +206,9 @@ int main(int argc, char *argv[]) {
         // --- NHẬN TỪ SERVER ---
         if (FD_ISSET(sockfd, &read_fds)) {
             char *payload = NULL;
-            int status = receive_message(sockfd, &payload);
+            int status = receive_message(sockfd, &payload); // Sử dụng framing để nhận đủ gói
             if (status == 0) {
-                print_server_response(payload); // In ra đẹp hơn
+                print_server_response(payload);
                 free(payload);
             } else {
                 printf("\nMat ket noi Server!\n");
@@ -200,15 +219,11 @@ int main(int argc, char *argv[]) {
         // --- NHẬN TỪ BÀN PHÍM ---
         if (FD_ISSET(STDIN_FILENO, &read_fds)) {
             if (fgets(stdin_buf, BUFFER_SIZE, stdin) != NULL) {
-                trim(stdin_buf); // Xóa \n và khoảng trắng thừa
+                trim(stdin_buf);
                 if (strlen(stdin_buf) > 0) {
-                    
-                    // Chuyển lệnh text sang JSON
-                    // Lưu ý: Cần copy buffer vì strtok sẽ làm hỏng chuỗi gốc nếu muốn dùng lại (ở đây gửi luôn nên ko sao)
                     char *json_to_send = convert_command_to_json(stdin_buf);
-                    
                     if (json_to_send) {
-                        send_message(sockfd, json_to_send);
+                        send_message(sockfd, json_to_send); // Gửi gói tin JSON kèm độ dài
                         free(json_to_send);
                     } else {
                          printf("YOU> "); fflush(stdout);

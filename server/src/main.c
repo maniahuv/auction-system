@@ -5,9 +5,6 @@
 UserState users[MAX_USERS];
 RoomState rooms[MAX_ROOMS];
 
-char *handle_login(int fd, cJSON *json);
-char *handle_bid(int fd, cJSON *json);
-
 // Quan ly ket noi
 
 // Khoi tao slot cho user moi ket noi
@@ -191,11 +188,17 @@ int main() {
               get_json_int(json, "type", &type);
 
               switch (type) {
+              case C2S_REGISTER:
+                response = handle_register(i, json);
+                break;
               case C2S_LOGIN:
                 response = handle_login(i, json);
                 break;
               case C2S_BID:
                 response = handle_bid(i, json);
+                break;
+              case C2S_BUY_NOW:
+                response = handle_buy_now(i, json);
                 break;
               case C2S_CREATE_ROOM:
                 response = handle_create_room(i, json);
