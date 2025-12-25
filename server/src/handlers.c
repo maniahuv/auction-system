@@ -56,10 +56,11 @@ char *handle_register(int fd, cJSON *json) {
     char line[100], existing_user[50], existing_pass[50];
     if (f) {
         while (fgets(line, sizeof(line), f)) {
-            sscanf(line, "%[^:]:%s", existing_user, existing_pass);
-            if (strcmp(existing_user, user) == 0) {
-                fclose(f);
-                return create_error_response(ERR_USER_EXISTS, "Username already exists");
+            if (sscanf(line, "%[^:]:%s", existing_user, existing_pass) == 2) {
+                if (strcmp(existing_user, user) == 0) {
+                    fclose(f);
+                    return create_error_response(ERR_USER_EXISTS, "Username already exists");
+                }
             }
         }
         fclose(f);
@@ -85,9 +86,10 @@ char *handle_login(int fd, cJSON *json) {
     char line[100], u[50], p[50];
     int found = 0;
     while (fgets(line, sizeof(line), f)) {
-        sscanf(line, "%[^:]:%s", u, p);
-        if (strcmp(u, user) == 0 && strcmp(p, pass) == 0) {
-            found = 1; break;
+        if (sscanf(line, "%[^:]:%s", u, p) == 2) {
+            if (strcmp(u, user) == 0 && strcmp(p, pass) == 0) {
+                found = 1; break;
+            }
         }
     }
     fclose(f);
@@ -118,20 +120,13 @@ char *handle_bid(int fd, cJSON *json) {
   int price = 0;
   get_json_int(json, "price", &price); // Client gửi lên giá muốn đặt
 
-  // Tìm phòng user đang ở
-  RoomState *room = NULL;
-  for (int i = 0; i < MAX_ROOMS; i++) {
-    if (rooms[i].room_id == u->current_room_id) {
-      room = &rooms[i];
-      break;
-    }
-  }
+  // Tìm phòng user đang ở (ID phòng là index + 1)
+  RoomState *room = &rooms[u->current_room_id - 1];
 
-  if (!room)
-    return create_error_response(ERR_UNKNOWN, "Room error");
+  if (!room || !room->is_active)
+    return create_error_response(ERR_UNKNOWN, "Auction is not active");
 
-  // LOGIC KIỂM TRA GIÁ: Phải cao hơn giá hiện tại ít nhất 1 bước giá (hoặc chỉ
-  // cần > hiện tại)
+  // LOGIC KIỂM TRA GIÁ: Phải cao hơn giá hiện tại
   if (price <= room->current_price) {
     return create_error_response(ERR_BID_TOO_LOW,
                                  "Price must be higher than current price");
@@ -139,26 +134,26 @@ char *handle_bid(int fd, cJSON *json) {
 
   // CẬP NHẬT TRẠNG THÁI
   room->current_price = price;
-  room->highest_bidder_id = u->fd; // Lưu người giữ giá cao nhất
+  room->highest_bidder_id = u->fd; 
 
   time_t now = time(NULL);
   room->end_time = now + 30;
+  room->sent_warning = 0; // Reset cờ cảnh báo cho lượt bid mới
 
-  log_activity(u->username, "Placed a bid"); // Ghi log hoạt động đặt giá
+  log_activity(u->username, "Placed a bid"); 
 
-  // BROADCAST: Báo tin vui cho cả làng
+  // BROADCAST cho cả phòng
   cJSON *bc = cJSON_CreateObject();
-  cJSON_AddNumberToObject(bc, "type", S2C_NEW_BID); // 904
+  cJSON_AddNumberToObject(bc, "type", S2C_NEW_BID); 
   cJSON_AddNumberToObject(bc, "room_id", room->room_id);
   cJSON_AddNumberToObject(bc, "current_price", room->current_price);
-  cJSON_AddStringToObject(bc, "bidder", u->username); // Gửi tên người vừa bid
+  cJSON_AddStringToObject(bc, "bidder", u->username);
 
   char *s_bc = cJSON_PrintUnformatted(bc);
   broadcast_to_room(room->room_id, s_bc);
   free(s_bc);
   cJSON_Delete(bc);
 
-  // Trả về OK cho người vừa bid
   return create_ok_response();
 }
 
@@ -171,37 +166,38 @@ char *handle_create_room(int fd, cJSON *json) {
   const char *title = get_json_string(json, "title");
   int start_price = 0;
   get_json_int(json, "start_price", &start_price);
-  
-  // Lấy giá mua ngay (buy_now) từ JSON gửi lên
   int buy_now_price = 0;
   get_json_int(json, "buy_now", &buy_now_price);
 
   if (!title || start_price <= 0)
     return create_error_response(ERR_INVALID_MESSAGE, "Invalid title or price");
 
-  // Tìm slot phòng trống
   for (int i = 0; i < MAX_ROOMS; i++) {
-    if (rooms[i].room_id == 0) { // Slot trống
-      rooms[i].room_id = i + 1;  // ID bắt đầu từ 1
-      strncpy(rooms[i].title, title, 99);
-      rooms[i].current_price = start_price;
+    if (rooms[i].room_id == 0) { 
+      rooms[i].room_id = i + 1;
+      rooms[i].is_active = 1;    
       
-      // Gán giá mua ngay (Lưu ý: Bạn cần thêm buy_now_price vào struct RoomState trong state.h)
-      rooms[i].buy_now_price = buy_now_price; 
+      // --- LOGIC HÀNG CHỜ ---
+      strncpy(rooms[i].queue[0].title, title, 99);
+      rooms[i].queue[0].start_price = start_price;
+      rooms[i].queue[0].buy_now_price = buy_now_price;
+      
+      rooms[i].total_items = 1;      
+      rooms[i].current_item_idx = 0; 
 
+      rooms[i].current_price = start_price;
       rooms[i].highest_bidder_id = -1;
-      rooms[i].is_active = 1;
-      rooms[i].end_time = 0;
-      // Set user hiện tại là chủ phòng (hoặc cho join luôn)
+      rooms[i].end_time = 0; 
+      rooms[i].sent_warning = 0; 
+
       u->current_room_id = rooms[i].room_id;
+      log_activity(u->username, "Created a room with queue management"); 
 
-      log_activity(u->username, "Created a room"); // Ghi log hoạt động tạo phòng
-
-      // Trả về OK kèm room_id
       cJSON *resp = cJSON_CreateObject();
       cJSON_AddNumberToObject(resp, "type", S2C_GENERIC_OK);
-      cJSON_AddStringToObject(resp, "message", "Room created");
+      cJSON_AddStringToObject(resp, "message", "Room created successfully");
       cJSON_AddNumberToObject(resp, "room_id", rooms[i].room_id);
+      
       char *s = cJSON_PrintUnformatted(resp);
       cJSON_Delete(resp);
       return s;
@@ -210,27 +206,37 @@ char *handle_create_room(int fd, cJSON *json) {
   return create_error_response(ERR_UNKNOWN, "Server full (max rooms reached)");
 }
 
-// Hàm xử lý: LIST PHÒNG
 char *handle_list_rooms(int fd) {
-  (void)fd; // Unused parameter
-  cJSON *resp = cJSON_CreateObject();
-  cJSON_AddNumberToObject(resp, "type", S2C_ROOM_LIST);
-  cJSON *arr = cJSON_CreateArray();
+    (void)fd; 
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "type", S2C_ROOM_LIST);
+    cJSON *arr = cJSON_CreateArray();
 
-  for (int i = 0; i < MAX_ROOMS; i++) {
-    if (rooms[i].room_id != 0 && rooms[i].is_active) {
-      cJSON *item = cJSON_CreateObject();
-      cJSON_AddNumberToObject(item, "id", rooms[i].room_id);
-      cJSON_AddStringToObject(item, "title", rooms[i].title);
-      cJSON_AddNumberToObject(item, "price", rooms[i].current_price);
-      cJSON_AddItemToArray(arr, item);
+    for (int i = 0; i < MAX_ROOMS; i++) {
+        if (rooms[i].room_id != 0 && rooms[i].is_active) {
+            cJSON *item_room = cJSON_CreateObject();
+            cJSON_AddNumberToObject(item_room, "id", rooms[i].room_id);
+            cJSON_AddNumberToObject(item_room, "current_price", rooms[i].current_price);
+            cJSON_AddNumberToObject(item_room, "current_idx", rooms[i].current_item_idx);
+
+            // Thêm danh sách vật phẩm trong hàng chờ của phòng này
+            cJSON *queue_arr = cJSON_CreateArray();
+            for (int j = 0; j < rooms[i].total_items; j++) {
+                cJSON *obj = cJSON_CreateObject();
+                cJSON_AddStringToObject(obj, "title", rooms[i].queue[j].title);
+                cJSON_AddNumberToObject(obj, "start_price", rooms[i].queue[j].start_price);
+                cJSON_AddNumberToObject(obj, "buy_now", rooms[i].queue[j].buy_now_price);
+                cJSON_AddItemToArray(queue_arr, obj);
+            }
+            cJSON_AddItemToObject(item_room, "queue", queue_arr);
+            cJSON_AddItemToArray(arr, item_room);
+        }
     }
-  }
-  cJSON_AddItemToObject(resp, "rooms", arr);
+    cJSON_AddItemToObject(resp, "rooms", arr);
 
-  char *s = cJSON_PrintUnformatted(resp);
-  cJSON_Delete(resp);
-  return s;
+    char *s = cJSON_PrintUnformatted(resp);
+    cJSON_Delete(resp);
+    return s;
 }
 
 // Hàm xử lý: JOIN PHÒNG
@@ -242,33 +248,22 @@ char *handle_join_room(int fd, cJSON *json) {
   int room_id = 0;
   get_json_int(json, "room_id", &room_id);
 
-  // Tìm phòng
-  int found = 0;
-  for (int i = 0; i < MAX_ROOMS; i++) {
-    if (rooms[i].room_id == room_id && rooms[i].is_active) {
-      found = 1;
-      u->current_room_id = room_id; // Gán user vào phòng này
+  if (room_id <= 0 || room_id > MAX_ROOMS || !rooms[room_id - 1].is_active)
+    return create_error_response(ERR_ROOM_NOT_FOUND, "Room not found or inactive");
 
-      log_activity(u->username, "Joined a room"); // Ghi log hoạt động tham gia phòng
+  u->current_room_id = room_id;
+  log_activity(u->username, "Joined a room"); 
 
-      cJSON *notif = cJSON_CreateObject();
-      cJSON_AddNumberToObject(notif, "type",
-                              S2C_GENERIC_OK); // Hoặc loại tin riêng nếu muốn
-      char msg[100];
-      snprintf(msg, sizeof(msg),"User %s joined the room", u->username);
-      cJSON_AddStringToObject(notif, "message", msg);
+  cJSON *notif = cJSON_CreateObject();
+  cJSON_AddNumberToObject(notif, "type", S2C_GENERIC_OK);
+  char msg[100];
+  snprintf(msg, sizeof(msg),"User %s joined the room", u->username);
+  cJSON_AddStringToObject(notif, "message", msg);
 
-      char *s_notif = cJSON_PrintUnformatted(notif);
-      broadcast_to_room(room_id, s_notif); // Gửi cho mọi người
-      free(s_notif);
-      cJSON_Delete(notif);
-
-      break;
-    }
-  }
-
-  if (!found)
-    return create_error_response(ERR_ROOM_NOT_FOUND, "Room not found");
+  char *s_notif = cJSON_PrintUnformatted(notif);
+  broadcast_to_room(room_id, s_notif); 
+  free(s_notif);
+  cJSON_Delete(notif);
 
   cJSON *resp = cJSON_CreateObject();
   cJSON_AddNumberToObject(resp, "type", S2C_JOIN_ROOM_SUCCESS);
@@ -280,28 +275,67 @@ char *handle_join_room(int fd, cJSON *json) {
 
 // Hàm xử lý: MUA NGAY (Buy Now)
 char *handle_buy_now(int fd, cJSON *json) {
-    (void)json; // Unused parameter
+    (void)json; 
     UserState *u = get_user_by_fd(fd);
     if (!u || !u->is_logged_in || u->current_room_id == -1)
-        return create_error_response(ERR_UNKNOWN, "Action not allowed (Check login or room)");
+        return create_error_response(ERR_UNKNOWN, "Action not allowed");
 
-    RoomState *room = NULL;
-    for (int i = 0; i < MAX_ROOMS; i++) {
-        if (rooms[i].room_id == u->current_room_id) {
-            room = &rooms[i];
-            break;
-        }
-    }
+    RoomState *room = &rooms[u->current_room_id - 1];
 
-    if (!room || !room->is_active || room->buy_now_price <= 0)
-        return create_error_response(ERR_UNKNOWN, "Buy Now option not available for this room");
+    // SỬA LỖI: Lấy buy_now_price từ vật phẩm hiện tại trong hàng chờ
+    int current_buy_now = room->queue[room->current_item_idx].buy_now_price;
 
-    // Thực hiện kết thúc đấu giá ngay lập tức với giá mua ngay
-    room->current_price = room->buy_now_price;
+    if (!room->is_active || current_buy_now <= 0)
+        return create_error_response(ERR_UNKNOWN, "Buy Now option not available");
+
+    // Thực hiện kết thúc đấu giá ngay lập tức
+    room->current_price = current_buy_now;
     room->highest_bidder_id = u->fd;
-    room->end_time = time(NULL); // Set thời gian kết thúc là hiện tại
+    room->end_time = time(NULL); 
 
-    log_activity(u->username, "Used BUY NOW"); // Ghi log hoạt động mua ngay
+    log_activity(u->username, "Used BUY NOW"); 
+
+    return create_ok_response();
+}
+
+// Hàm xử lý: THÊM VẬT PHẨM VÀO PHÒNG CHỈ ĐỊNH
+char *handle_add_item(int fd, cJSON *json) {
+    UserState *u = get_user_by_fd(fd);
+    if (!u || !u->is_logged_in)
+        return create_error_response(ERR_UNKNOWN, "Login required");
+
+    int room_id = 0;
+    get_json_int(json, "room_id", &room_id); // Lấy room_id từ client
+
+    if (room_id <= 0 || room_id > MAX_ROOMS || !rooms[room_id - 1].is_active)
+        return create_error_response(ERR_ROOM_NOT_FOUND, "Room not found or inactive");
+
+    RoomState *r = &rooms[room_id - 1];
+    if (r->total_items >= MAX_ITEMS_PER_ROOM)
+        return create_error_response(ERR_UNKNOWN, "Queue full for this room");
+
+    const char *title = get_json_string(json, "title");
+    int start_p = 0, buy_n = 0;
+    get_json_int(json, "start_price", &start_p);
+    get_json_int(json, "buy_now", &buy_n);
+
+    if (!title || start_p <= 0)
+        return create_error_response(ERR_INVALID_MESSAGE, "Invalid item info");
+
+    // Thêm vào cuối hàng chờ của phòng r
+    int idx = r->total_items;
+    strncpy(r->queue[idx].title, title, 99);
+    r->queue[idx].start_price = start_p;
+    r->queue[idx].buy_now_price = buy_n;
+    r->total_items++;
+
+    log_activity(u->username, "Added item to a room queue");
+    
+    // Thông báo cho mọi người đang ở trong phòng đó
+    cJSON *notif = cJSON_CreateObject();
+    cJSON_AddNumberToObject(notif, "type", S2C_GENERIC_OK);
+    cJSON_AddStringToObject(notif, "message", "A new item was added to the queue");
+    broadcast_to_room(r->room_id, cJSON_PrintUnformatted(notif));
 
     return create_ok_response();
 }

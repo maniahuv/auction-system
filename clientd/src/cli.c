@@ -46,6 +46,7 @@ char* convert_command_to_json(char *input) {
         }
     }
     // --- LỆNH: CREATE title start_price buy_now_price ---
+    // Khởi tạo phòng đấu giá với vật phẩm đầu tiên
     else if (strcmp(cmd, "create") == 0) {
         char *title = strtok(NULL, " ");
         char *price_str = strtok(NULL, " ");
@@ -60,6 +61,24 @@ char* convert_command_to_json(char *input) {
             cJSON_Delete(req); return NULL;
         }
     }
+    // --- LỆNH: ADDITEM room_id title start_price buy_now_price ---
+    // Thêm vật phẩm vào hàng chờ của một phòng cụ thể (Queue Management)
+    else if (strcmp(cmd, "additem") == 0) {
+        char *room_id_str = strtok(NULL, " ");
+        char *title = strtok(NULL, " ");
+        char *price_str = strtok(NULL, " ");
+        char *buy_now_str = strtok(NULL, " ");
+        if (room_id_str && title && price_str && buy_now_str) {
+            cJSON_AddNumberToObject(req, "type", C2S_CREATE_ITEM); // 301
+            cJSON_AddNumberToObject(req, "room_id", atoi(room_id_str));
+            cJSON_AddStringToObject(req, "title", title);
+            cJSON_AddNumberToObject(req, "start_price", atoi(price_str));
+            cJSON_AddNumberToObject(req, "buy_now", atoi(buy_now_str));
+        } else {
+            printf(">> Sai cu phap! Dung: additem <room_id> <title> <start_price> <buy_now_price>\n");
+            cJSON_Delete(req); return NULL;
+        }
+    }
     // --- LỆNH: JOIN room_id ---
     else if (strcmp(cmd, "join") == 0) {
         char *id_str = strtok(NULL, " ");
@@ -70,6 +89,10 @@ char* convert_command_to_json(char *input) {
             printf(">> Sai cu phap! Dung: join <room_id>\n");
             cJSON_Delete(req); return NULL;
         }
+    }
+    // --- LỆNH: LEAVE ---
+    else if (strcmp(cmd, "leave") == 0) {
+        cJSON_AddNumberToObject(req, "type", C2S_LEAVE_ROOM); // 204
     }
     // --- LỆNH: BID price ---
     else if (strcmp(cmd, "bid") == 0) {
@@ -96,7 +119,7 @@ char* convert_command_to_json(char *input) {
         return strdup(input);
     }
     else {
-        printf(">> Lenh khong hop le! (register, login, create, join, bid, buynow, list)\n");
+        printf(">> Lenh khong hop le! (register, login, create, additem, join, leave, bid, buynow, list)\n");
         cJSON_Delete(req);
         return NULL;
     }
@@ -105,6 +128,7 @@ char* convert_command_to_json(char *input) {
     cJSON_Delete(req);
     return json_str;
 }
+
 
 // Hàm in phản hồi từ Server cho đẹp
 void print_server_response(char *json_str) {
@@ -118,39 +142,72 @@ void print_server_response(char *json_str) {
     get_json_int(json, "type", &type);
 
     switch (type) {
-        case S2C_GENERIC_OK: // Phản hồi thành công chung (dùng cho register, buynow...)
-            printf("\n[SUCCESS] Thao tac thanh cong: %s\n", get_json_string(json, "message"));
+        case S2C_GENERIC_OK: // Phản hồi thành công chung (register, buynow, additem...)
+            printf("\n[SUCCESS] %s\n", get_json_string(json, "message"));
             break;
+
         case S2C_LOGIN_SUCCESS:
             printf("\n[SUCCESS] Dang nhap thanh cong!\n");
             break;
+
         case S2C_ROOM_LIST:
-            printf("\n--- DANH SACH PHONG ---\n");
-            cJSON *rooms = cJSON_GetObjectItem(json, "rooms");
+            printf("\n======= DANH SACH PHONG & HANG CHO =======\n");
+            cJSON *rooms_json = cJSON_GetObjectItem(json, "rooms");
             cJSON *r;
-            cJSON_ArrayForEach(r, rooms) {
-                int id = 0, price = 0;
-                char *title = NULL;
-                get_json_int(r, "id", &id);
-                get_json_int(r, "price", &price);
-                title = (char*)get_json_string(r, "title");
-                printf("#%d - %s (Gia hien tai: %d)\n", id, title, price);
+            cJSON_ArrayForEach(r, rooms_json) {
+                int id = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(r, "id"));
+                int cur_p = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(r, "current_price"));
+                int cur_idx = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(r, "current_idx"));
+                
+                printf("\n[PHONG #%d] - Gia hien tai: %d\n", id, cur_p);
+                printf("  Danh sach hang cho:\n");
+                
+                cJSON *queue = cJSON_GetObjectItem(r, "queue");
+                cJSON *it;
+                int count = 0;
+                cJSON_ArrayForEach(it, queue) {
+                    // Xử lý trạng thái hiển thị của từng món hàng
+                    char *status = (count == cur_idx) ? "(*) DANG DAU GIA" : (count < cur_idx ? "[Da xong]" : "[Dang cho]");
+                    printf("    %d. %-15s | Gia BD: %-6d | Mua ngay: %-6d %s\n", 
+                           count + 1,
+                           cJSON_GetStringValue(cJSON_GetObjectItem(it, "title")),
+                           (int)cJSON_GetNumberValue(cJSON_GetObjectItem(it, "start_price")),
+                           (int)cJSON_GetNumberValue(cJSON_GetObjectItem(it, "buy_now")),
+                           status);
+                    count++;
+                }
             }
-            printf("-----------------------\n");
+            printf("\n===========================================\n");
             break;
+
+        case S2C_NEW_ITEM_PENDING: // Thông báo khi món hàng tiếp theo lên sàn
+            printf("\n>>> [VAT PHAM MOI] Bat dau dau gia: %s (Gia khoi diem: %d)\n",
+                   get_json_string(json, "title"),
+                   (int)cJSON_GetNumberValue(cJSON_GetObjectItem(json, "start_price")));
+            break;
+
         case S2C_NEW_BID:
             printf("\n>>> [BID] %s vua dat gia: %d\n", 
                    get_json_string(json, "bidder"), 
                    (int)cJSON_GetNumberValue(cJSON_GetObjectItem(json, "current_price")));
             break;
+
         case S2C_AUCTION_ENDED:
-             printf("\n>>> [KET THUC] Nguoi thang: %s - Gia cuoi: %d\n", 
+             printf("\n>>> [KET THUC] Vat pham '%s' da co chu!\n", get_json_string(json, "item_title"));
+             printf("    Nguoi thang: %s - Gia cuoi: %d\n", 
                    get_json_string(json, "winner"), 
                    (int)cJSON_GetNumberValue(cJSON_GetObjectItem(json, "final_price")));
             break;
+
+        case S2C_TIME_ALERT:
+            printf("\n>>> [CANH BAO] Phien dau gia con %d giay nua!\n", 
+                   (int)cJSON_GetNumberValue(cJSON_GetObjectItem(json, "time_left")));
+            break;
+
         case S2C_GENERIC_ERROR:
              printf("\n[ERROR] %s\n", get_json_string(json, "message"));
              break;
+
         default:
             printf("SERVER: %s\n", json_str);
     }

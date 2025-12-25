@@ -42,20 +42,36 @@ void check_auctions() {
   for (int i = 0; i < MAX_ROOMS; i++) {
     RoomState *r = &rooms[i];
 
-    // Chỉ kiểm tra phòng đang active và đã bắt đầu đếm giờ (end_time > 0)
+    // Chỉ kiểm tra phòng đang hoạt động và đã bắt đầu đếm giờ (end_time > 0)
     if (r->is_active && r->end_time > 0) {
+      double diff = difftime(r->end_time, now);
 
-      // Nếu đã qua giờ kết thúc
-      if (now >= r->end_time) {
-        printf("[Timer] Room %d ended!\n", r->room_id);
+      // --- 1. LOGIC CẢNH BÁO 30 GIÂY ---
+      if (diff <= 30.0 && diff > 0 && r->sent_warning == 0) {
+        r->sent_warning = 1; // Đánh dấu đã gửi cảnh báo
 
-        // 1. Đóng phòng
-        r->is_active = 0;
+        cJSON *alert = cJSON_CreateObject();
+        cJSON_AddNumberToObject(alert, "type", S2C_TIME_ALERT); // Mã 905
+        cJSON_AddNumberToObject(alert, "room_id", r->room_id);
+        cJSON_AddStringToObject(alert, "message", "CẢNH BÁO: Phiên đấu giá chỉ còn 30 giây cuối cùng!");
+        cJSON_AddNumberToObject(alert, "time_left", (int)diff);
 
-        // 2. Tìm tên người thắng
-        char winner_name[50] = "No one";
+        char *s_alert = cJSON_PrintUnformatted(alert);
+        broadcast_to_room(r->room_id, s_alert);
+        
+        printf("[Timer] Room %d: Sent 30s time alert\n", r->room_id);
+        
+        free(s_alert);
+        cJSON_Delete(alert);
+      }
+
+      // --- 2. LOGIC KẾT THÚC VẬT PHẨM HIỆN TẠI ---
+      if (diff <= 0) {
+        printf("[Timer] Item '%s' in Room %d ended!\n", r->queue[r->current_item_idx].title, r->room_id);
+
+        // Tìm tên người thắng cuộc cho vật phẩm hiện tại
+        char winner_name[50] = "Không có";
         if (r->highest_bidder_id != -1) {
-          // Tìm user trong mảng users
           for (int u = 0; u < MAX_USERS; u++) {
             if (users[u].fd == r->highest_bidder_id) {
               strcpy(winner_name, users[u].username);
@@ -64,22 +80,52 @@ void check_auctions() {
           }
         }
 
-        // 3. Thông báo Broadcast: KẾT THÚC
+        // Thông báo kết thúc cho vật phẩm này
         cJSON *msg = cJSON_CreateObject();
-        cJSON_AddNumberToObject(msg, "type", S2C_AUCTION_ENDED); // 906
+        cJSON_AddNumberToObject(msg, "type", S2C_AUCTION_ENDED); // Mã 906
         cJSON_AddNumberToObject(msg, "room_id", r->room_id);
+        cJSON_AddStringToObject(msg, "item_title", r->queue[r->current_item_idx].title);
         cJSON_AddStringToObject(msg, "winner", winner_name);
         cJSON_AddNumberToObject(msg, "final_price", r->current_price);
 
         char *s = cJSON_PrintUnformatted(msg);
-        broadcast_to_room(r->room_id, s); // Hàm này bạn đã viết ở bước trước
+        broadcast_to_room(r->room_id, s);
         free(s);
         cJSON_Delete(msg);
+
+        // --- 3. KIỂM TRA HÀNG CHỜ (QUEUE LOGIC) ---
+        if (r->current_item_idx + 1 < r->total_items) {
+          // Vẫn còn vật phẩm tiếp theo trong hàng chờ
+          r->current_item_idx++; // Chuyển sang món tiếp theo
+          
+          // Reset trạng thái đấu giá cho vật phẩm mới dựa trên thông tin trong queue
+          r->current_price = r->queue[r->current_item_idx].start_price;
+          r->highest_bidder_id = -1;
+          r->end_time = 0;       // Chờ lượt đặt giá đầu tiên để bắt đầu đếm ngược lại
+          r->sent_warning = 0;   // Reset cờ cảnh báo cho vật phẩm mới
+
+          // Thông báo cho phòng biết vật phẩm tiếp theo bắt đầu lên sàn
+          cJSON *next_item = cJSON_CreateObject();
+          cJSON_AddNumberToObject(next_item, "type", S2C_NEW_ITEM_PENDING); // Mã 902
+          cJSON_AddNumberToObject(next_item, "room_id", r->room_id);
+          cJSON_AddStringToObject(next_item, "title", r->queue[r->current_item_idx].title);
+          cJSON_AddNumberToObject(next_item, "start_price", r->current_price);
+          
+          char *s_next = cJSON_PrintUnformatted(next_item);
+          broadcast_to_room(r->room_id, s_next);
+          free(s_next);
+          cJSON_Delete(next_item);
+
+          printf("[Queue] Room %d moved to next item: %s\n", r->room_id, r->queue[r->current_item_idx].title);
+        } else {
+          // Đã hết vật phẩm trong hàng chờ -> Đóng phòng
+          r->is_active = 0;
+          printf("[Timer] Room %d: All items in queue finished. Room closed.\n", r->room_id);
+        }
       }
     }
   }
 }
-
 
 
 int main() {
@@ -202,6 +248,9 @@ int main() {
                 break;
               case C2S_CREATE_ROOM:
                 response = handle_create_room(i, json);
+                break;
+              case C2S_CREATE_ITEM:
+                response = handle_add_item(i, json);
                 break;
               case C2S_LIST_ROOMS:
                 response = handle_list_rooms(i);

@@ -4,3 +4,34 @@
 [Thu Dec 25 22:55:57 2025] User: nam        | Action: Created a room
 [Thu Dec 25 22:56:05 2025] User: nam        | Action: Joined a room
 [Thu Dec 25 22:56:11 2025] User: nam        | Action: Used BUY NOW
+[Thu Dec 25 23:12:00 2025] User: nam        | Action: LOGGED IN
+[Thu Dec 25 23:12:08 2025] User: nam        | Action: Created a room
+[Thu Dec 25 23:12:15 2025] User: nam        | Action: Joined a room
+[Thu Dec 25 23:12:22 2025] User: nam        | Action: Placed a bid
+[Thu Dec 25 23:12:25 2025] User: nam        | Action: Placed a bid
+[Thu Dec 25 23:13:14 2025] User: nam        | Action: Created a room
+[Thu Dec 25 23:13:22 2025] User: nam        | Action: Placed a bid
+[Thu Dec 25 23:13:32 2025] User: nam        | Action: Placed a bid
+[Thu Dec 25 23:14:06 2025] User: linh       | Action: REGISTERED new account
+[Thu Dec 25 23:14:09 2025] User: linh       | Action: LOGGED IN
+[Thu Dec 25 23:14:21 2025] User: linh       | Action: Created a room
+[Thu Dec 25 23:14:34 2025] User: linh       | Action: Joined a room
+[Thu Dec 25 23:14:38 2025] User: nam        | Action: Joined a room
+[Thu Dec 25 23:14:42 2025] User: nam        | Action: Placed a bid
+[Thu Dec 25 23:14:48 2025] User: linh       | Action: Placed a bid
+[Thu Dec 25 23:14:59 2025] User: nam        | Action: Placed a bid
+[Thu Dec 25 23:15:13 2025] User: linh       | Action: Placed a bid
+[Thu Dec 25 23:31:53 2025] User: nam        | Action: LOGGED IN
+[Thu Dec 25 23:32:13 2025] User: linh       | Action: LOGGED IN
+[Thu Dec 25 23:32:21 2025] User: linh       | Action: Created a room with queue management
+[Thu Dec 25 23:32:30 2025] User: linh       | Action: Created a room with queue management
+[Thu Dec 25 23:38:58 2025] User: nam        | Action: LOGGED IN
+[Thu Dec 25 23:39:11 2025] User: nam        | Action: Created a room with queue management
+[Thu Dec 25 23:39:32 2025] User: nam        | Action: Added item to queue
+[Thu Dec 25 23:39:46 2025] User: nam        | Action: Created a room with queue management
+[Thu Dec 25 23:40:23 2025] User: nam        | Action: Added item to queue
+[Thu Dec 25 23:47:32 2025] User: nam        | Action: LOGGED IN
+[Thu Dec 25 23:47:38 2025] User: linh       | Action: LOGGED IN
+[Thu Dec 25 23:47:53 2025] User: linh       | Action: Created a room with queue management
+[Thu Dec 25 23:48:30 2025] User: linh       | Action: Added item to a room queue
+[Thu Dec 25 23:48:44 2025] User: linh       | Action: Created a room with queue management
