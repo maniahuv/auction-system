@@ -65,7 +65,7 @@ make
 ### 2. Chạy Server
 
 ```bash
-cd ./server
+cd server
 make clean
 make
 cd ..
@@ -80,13 +80,13 @@ cd bin
 Mở một terminal mới:
 
 ```bash
-cd ./clientd
+cd clientd
 make clean
 make
 cd ..
 
 cd bin
-./auction_cli 127.0.0.1
+./auction_cli
 
 ```
 
@@ -154,5 +154,6 @@ Sau khi khởi chạy Client, bạn có thể sử dụng các lệnh sau:
 **Project:** 
 
 ---
+
 
 
