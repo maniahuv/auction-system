@@ -62,8 +62,16 @@ make clean
 make
 
 ```
+### 2. Biên dịch common
 
-### 2. Chạy Server
+```bash
+cd common
+make clean
+make
+
+```
+
+### 3. Chạy Server
 
 ```bash
 cd bin
@@ -71,7 +79,7 @@ cd bin
 
 ```
 
-### 3. Chạy Client
+### 4. Chạy Client
 
 Mở một terminal mới:
 
@@ -145,3 +153,4 @@ Sau khi khởi chạy Client, bạn có thể sử dụng các lệnh sau:
 **Project:** 
 
 ---
+
