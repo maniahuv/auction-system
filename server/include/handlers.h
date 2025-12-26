@@ -14,6 +14,7 @@ char *handle_add_item(int fd, cJSON *json);
 char *handle_search_item(int fd, cJSON *json);
 char *handle_list_rooms(int fd);
 char *handle_join_room(int fd, cJSON *json);
+char *handle_leave_room(int fd);
 char *handle_get_history(int fd);
 void broadcast_to_room(int room_id, char *json_message);
 

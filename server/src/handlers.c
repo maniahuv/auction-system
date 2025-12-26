@@ -449,33 +449,37 @@ char *handle_search_item(int fd, cJSON *json) {
     return cJSON_PrintUnformatted(resp);
 }
 
-// Rời phòng
+// Hàm xử lý: RỜI PHÒNG
 char *handle_leave_room(int fd) {
     UserState *u = get_user_by_fd(fd);
-    if (!u || !u->is_logged_in) 
+    if (!u || !u->is_logged_in)
         return create_error_response(ERR_UNKNOWN, "Login required");
 
     if (u->current_room_id == -1)
         return create_error_response(ERR_UNKNOWN, "You are not in any room");
 
-    int old_room_id = u->current_room_id;
-    u->current_room_id = -1; // Reset trạng thái phòng của user
+    int room_id_cu = u->current_room_id;
+    u->current_room_id = -1; // Đặt lại trạng thái không ở trong phòng nào
 
     log_activity(u->username, "Left the room");
 
-    // Thông báo cho những người còn lại trong phòng
+    // 1. Thông báo cho những người khác trong phòng (Broadcast)
     cJSON *notif = cJSON_CreateObject();
     cJSON_AddNumberToObject(notif, "type", S2C_GENERIC_OK);
     char msg[100];
-    snprintf(msg, sizeof(msg), "User %s has left the room", u->username);
+    snprintf(msg, sizeof(msg), "User %s da roi khoi phong", u->username);
     cJSON_AddStringToObject(notif, "message", msg);
-    
+
     char *s_notif = cJSON_PrintUnformatted(notif);
-    broadcast_to_room(old_room_id, s_notif);
+    broadcast_to_room(room_id_cu, s_notif);
     free(s_notif);
     cJSON_Delete(notif);
 
-    return create_ok_response();
+    // 2. Phản hồi thành công cho chính người vừa rời phòng
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "type", S2C_GENERIC_OK);
+    cJSON_AddStringToObject(resp, "message", "Ban da roi phong thanh cong");
+    return cJSON_PrintUnformatted(resp);
 }
 
 // Liệt kê vật phẩm đã thêm bởi user hiện tại

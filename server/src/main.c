@@ -279,6 +279,9 @@ int main() {
               case C2S_DELETE_ITEM:
                 response = handle_delete_item(i, json);
                 break;  
+              case C2S_LEAVE_ROOM:
+                response = handle_leave_room(i);
+                break;
               default:
                 response =
                     create_error_response(ERR_UNKNOWN, "Unknown command type");
