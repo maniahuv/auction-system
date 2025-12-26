@@ -53,16 +53,7 @@ Hệ thống đấu giá trực tuyến được xây dựng bằng ngôn ngữ 
 
 ## 🚀 Hướng dẫn cài đặt & Chạy
 
-### 1. Biên dịch
-
-Mở terminal tại thư mục gốc của dự án:
-
-```bash
-make clean
-make
-
-```
-### 2. Biên dịch common
+### 1. Biên dịch common
 
 ```bash
 cd common
@@ -71,19 +62,29 @@ make
 
 ```
 
-### 3. Chạy Server
+### 2. Chạy Server
 
 ```bash
+cd ./server
+make clean
+make
+cd ..
+
 cd bin
 ./server
 
 ```
 
-### 4. Chạy Client
+### 3. Chạy Client
 
 Mở một terminal mới:
 
 ```bash
+cd ./clientd
+make clean
+make
+cd ..
+
 cd bin
 ./auction_cli 127.0.0.1
 
@@ -153,4 +154,5 @@ Sau khi khởi chạy Client, bạn có thể sử dụng các lệnh sau:
 **Project:** 
 
 ---
+
 
