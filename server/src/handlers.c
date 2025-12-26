@@ -339,3 +339,166 @@ char *handle_add_item(int fd, cJSON *json) {
 
     return create_ok_response();
 }
+
+// Hàm xử lý: XÓA VẬT PHẨM TRONG HÀNG CHỜ
+char *handle_delete_item(int fd, cJSON *json) {
+    UserState *u = get_user_by_fd(fd);
+    if (!u || !u->is_logged_in)
+        return create_error_response(ERR_UNKNOWN, "Login required");
+
+    int room_id = 0, item_idx = 0;
+    get_json_int(json, "room_id", &room_id);
+    get_json_int(json, "item_index", &item_idx);
+
+    // Kiểm tra phòng có tồn tại không
+    if (room_id <= 0 || room_id > MAX_ROOMS || !rooms[room_id - 1].is_active) {
+        return create_error_response(ERR_ROOM_NOT_FOUND, "Room not found");
+    }
+
+    RoomState *r = &rooms[room_id - 1];
+    int real_idx = item_idx - 1;
+
+    // Kiểm tra tính hợp lệ: không được xóa món đang đấu giá hoặc đã đấu giá xong
+    if (real_idx <= r->current_item_idx || real_idx >= r->total_items) {
+        return create_error_response(ERR_UNKNOWN, "Cannot delete live, finished, or invalid item");
+    }
+
+    // Ghi log (Tăng buffer lên 256 để tránh warning)
+    char log_msg[256];
+    snprintf(log_msg, sizeof(log_msg), "Deleted item '%s' from Room %d queue", 
+             r->queue[real_idx].title, room_id);
+    log_activity(u->username, log_msg);
+
+    // Dịch chuyển mảng để xóa phần tử
+    for (int i = real_idx; i < r->total_items - 1; i++) {
+        r->queue[i] = r->queue[i + 1];
+    }
+    r->total_items--;
+
+    // Broadcast thông báo cho mọi người trong phòng đó biết danh sách hàng chờ đã thay đổi
+    cJSON *notif = cJSON_CreateObject();
+    cJSON_AddNumberToObject(notif, "type", S2C_GENERIC_OK);
+    cJSON_AddStringToObject(notif, "message", "An item was removed from the queue");
+    char *s_notif = cJSON_PrintUnformatted(notif);
+    broadcast_to_room(room_id, s_notif);
+    free(s_notif);
+    cJSON_Delete(notif);
+
+    return create_ok_response();
+}
+
+// Hàm xem lịch sử đấu giá của chính mình
+char *handle_get_history(int fd) {
+    UserState *u = get_user_by_fd(fd);
+    if (!u || !u->is_logged_in) return create_error_response(ERR_UNKNOWN, "Login required");
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "type", S2C_HISTORY_LIST);
+    cJSON *h_list = cJSON_CreateArray();
+
+    FILE *f = fopen("history.txt", "r");
+    if (f) {
+        char line[256], user[50], item[100];
+        int price; long ts;
+        while (fgets(line, sizeof(line), f)) {
+            if (sscanf(line, "%[^:]:%[^:]:%d:%ld", user, item, &price, &ts) == 4) {
+                // Chỉ lấy lịch sử của chính user đó
+                if (strcmp(user, u->username) == 0) {
+                    cJSON *h_item = cJSON_CreateObject();
+                    cJSON_AddStringToObject(h_item, "item", item);
+                    cJSON_AddNumberToObject(h_item, "price", price);
+                    cJSON_AddNumberToObject(h_item, "time", ts);
+                    cJSON_AddItemToArray(h_list, h_item);
+                }
+            }
+        }
+        fclose(f);
+    }
+    cJSON_AddItemToObject(resp, "history", h_list);
+    return cJSON_PrintUnformatted(resp);
+}
+
+char *handle_search_item(int fd, cJSON *json) {
+    (void)fd;
+    const char *keyword = get_json_string(json, "keyword");
+    if (!keyword) return create_error_response(ERR_INVALID_MESSAGE, "Missing keyword");
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "type", S2C_SEARCH_RESULT);
+    cJSON *results = cJSON_CreateArray();
+
+    for (int i = 0; i < MAX_ROOMS; i++) {
+        if (rooms[i].room_id != 0 && rooms[i].is_active) {
+            for (int j = 0; j < rooms[i].total_items; j++) {
+                if (strcasestr(rooms[i].queue[j].title, keyword)) {
+                    cJSON *res_item = cJSON_CreateObject();
+                    cJSON_AddNumberToObject(res_item, "room_id", rooms[i].room_id);
+                    cJSON_AddStringToObject(res_item, "title", rooms[i].queue[j].title);
+                    cJSON_AddNumberToObject(res_item, "current_price", 
+                        (j == rooms[i].current_item_idx) ? rooms[i].current_price : rooms[i].queue[j].start_price);
+                    
+                    char *status = (j == rooms[i].current_item_idx) ? "DANG DAU GIA" : 
+                                   (j < rooms[i].current_item_idx ? "Da xong" : "Dang cho");
+                    cJSON_AddStringToObject(res_item, "status", status);
+                    cJSON_AddItemToArray(results, res_item);
+                }
+            }
+        }
+    }
+    cJSON_AddItemToObject(resp, "results", results);
+    return cJSON_PrintUnformatted(resp);
+}
+
+// Rời phòng
+char *handle_leave_room(int fd) {
+    UserState *u = get_user_by_fd(fd);
+    if (!u || !u->is_logged_in) 
+        return create_error_response(ERR_UNKNOWN, "Login required");
+
+    if (u->current_room_id == -1)
+        return create_error_response(ERR_UNKNOWN, "You are not in any room");
+
+    int old_room_id = u->current_room_id;
+    u->current_room_id = -1; // Reset trạng thái phòng của user
+
+    log_activity(u->username, "Left the room");
+
+    // Thông báo cho những người còn lại trong phòng
+    cJSON *notif = cJSON_CreateObject();
+    cJSON_AddNumberToObject(notif, "type", S2C_GENERIC_OK);
+    char msg[100];
+    snprintf(msg, sizeof(msg), "User %s has left the room", u->username);
+    cJSON_AddStringToObject(notif, "message", msg);
+    
+    char *s_notif = cJSON_PrintUnformatted(notif);
+    broadcast_to_room(old_room_id, s_notif);
+    free(s_notif);
+    cJSON_Delete(notif);
+
+    return create_ok_response();
+}
+
+// Liệt kê vật phẩm đã thêm bởi user hiện tại
+char *handle_list_my_items(int fd) {
+    UserState *u = get_user_by_fd(fd);
+    if (!u || !u->is_logged_in) return create_error_response(ERR_UNKNOWN, "Login required");
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "type", S2C_GENERIC_OK); // Hoặc tạo mã S2C_MY_ITEMS_LIST
+    cJSON *arr = cJSON_CreateArray();
+
+    // Duyệt qua tất cả các phòng để tìm vật phẩm user này đã thêm (nếu cần logic này)
+    // Hoặc đơn giản là liệt kê trong phòng hiện tại
+    if (u->current_room_id != -1) {
+        RoomState *r = &rooms[u->current_room_id - 1];
+        for (int j = 0; j < r->total_items; j++) {
+            cJSON *item = cJSON_CreateObject();
+            cJSON_AddStringToObject(item, "title", r->queue[j].title);
+            cJSON_AddNumberToObject(item, "status", (j == r->current_item_idx) ? 1 : (j < r->current_item_idx ? 0 : 2));
+            cJSON_AddItemToArray(arr, item);
+        }
+    }
+    
+    cJSON_AddItemToObject(resp, "my_items", arr);
+    return cJSON_PrintUnformatted(resp);
+}

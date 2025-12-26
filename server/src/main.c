@@ -69,7 +69,7 @@ void check_auctions() {
       if (diff <= 0) {
         printf("[Timer] Item '%s' in Room %d ended!\n", r->queue[r->current_item_idx].title, r->room_id);
 
-        // Tìm tên người thắng cuộc cho vật phẩm hiện tại
+        // Tìm tên người thắng cuộc
         char winner_name[50] = "Không có";
         if (r->highest_bidder_id != -1) {
           for (int u = 0; u < MAX_USERS; u++) {
@@ -80,9 +80,24 @@ void check_auctions() {
           }
         }
 
-        // Thông báo kết thúc cho vật phẩm này
+        // === VỊ TRÍ SỬA: Lưu lịch sử NGAY TẠI ĐÂY (Cho tất cả các món) ===
+        if (r->highest_bidder_id != -1) {
+            FILE *hf = fopen("history.txt", "a");
+            if (hf) {
+                // Ghi: tên_user:tên_vật_phẩm:giá_cuối:thời_gian
+                fprintf(hf, "%s:%s:%d:%ld\n", 
+                        winner_name, 
+                        r->queue[r->current_item_idx].title, 
+                        r->current_price, 
+                        (long)time(NULL));
+                fclose(hf);
+                printf("[History] Saved: %s won %s\n", winner_name, r->queue[r->current_item_idx].title);
+            }
+        }
+
+        // Thông báo kết thúc cho vật phẩm (Broadcast)
         cJSON *msg = cJSON_CreateObject();
-        cJSON_AddNumberToObject(msg, "type", S2C_AUCTION_ENDED); // Mã 906
+        cJSON_AddNumberToObject(msg, "type", S2C_AUCTION_ENDED); 
         cJSON_AddNumberToObject(msg, "room_id", r->room_id);
         cJSON_AddStringToObject(msg, "item_title", r->queue[r->current_item_idx].title);
         cJSON_AddStringToObject(msg, "winner", winner_name);
@@ -93,20 +108,18 @@ void check_auctions() {
         free(s);
         cJSON_Delete(msg);
 
-        // --- 3. KIỂM TRA HÀNG CHỜ (QUEUE LOGIC) ---
+        // --- 3. CHUYỂN MÓN HOẶC ĐÓNG PHÒNG ---
         if (r->current_item_idx + 1 < r->total_items) {
-          // Vẫn còn vật phẩm tiếp theo trong hàng chờ
-          r->current_item_idx++; // Chuyển sang món tiếp theo
-          
-          // Reset trạng thái đấu giá cho vật phẩm mới dựa trên thông tin trong queue
+          // Còn món tiếp theo
+          r->current_item_idx++; 
           r->current_price = r->queue[r->current_item_idx].start_price;
           r->highest_bidder_id = -1;
-          r->end_time = 0;       // Chờ lượt đặt giá đầu tiên để bắt đầu đếm ngược lại
-          r->sent_warning = 0;   // Reset cờ cảnh báo cho vật phẩm mới
+          r->end_time = 0;       
+          r->sent_warning = 0;   
 
-          // Thông báo cho phòng biết vật phẩm tiếp theo bắt đầu lên sàn
+          // Thông báo vật phẩm mới
           cJSON *next_item = cJSON_CreateObject();
-          cJSON_AddNumberToObject(next_item, "type", S2C_NEW_ITEM_PENDING); // Mã 902
+          cJSON_AddNumberToObject(next_item, "type", S2C_NEW_ITEM_PENDING);
           cJSON_AddNumberToObject(next_item, "room_id", r->room_id);
           cJSON_AddStringToObject(next_item, "title", r->queue[r->current_item_idx].title);
           cJSON_AddNumberToObject(next_item, "start_price", r->current_price);
@@ -115,12 +128,11 @@ void check_auctions() {
           broadcast_to_room(r->room_id, s_next);
           free(s_next);
           cJSON_Delete(next_item);
-
-          printf("[Queue] Room %d moved to next item: %s\n", r->room_id, r->queue[r->current_item_idx].title);
         } else {
-          // Đã hết vật phẩm trong hàng chờ -> Đóng phòng
+          // Hết món -> Đóng phòng
           r->is_active = 0;
-          printf("[Timer] Room %d: All items in queue finished. Room closed.\n", r->room_id);
+          r->room_id = 0; // Giải phóng slot phòng
+          printf("[Timer] Room ended and cleaned up.\n");
         }
       }
     }
@@ -258,6 +270,15 @@ int main() {
               case C2S_JOIN_ROOM:
                 response = handle_join_room(i, json);
                 break;
+              case C2S_SEARCH_ITEM:
+                response = handle_search_item(i, json);
+                break;
+              case C2S_GET_HISTORY:
+                response = handle_get_history(i);
+                break;
+              case C2S_DELETE_ITEM:
+                response = handle_delete_item(i, json);
+                break;  
               default:
                 response =
                     create_error_response(ERR_UNKNOWN, "Unknown command type");

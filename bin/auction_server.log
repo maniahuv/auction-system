@@ -35,3 +35,47 @@
 [Thu Dec 25 23:47:53 2025] User: linh       | Action: Created a room with queue management
 [Thu Dec 25 23:48:30 2025] User: linh       | Action: Added item to a room queue
 [Thu Dec 25 23:48:44 2025] User: linh       | Action: Created a room with queue management
+[Thu Dec 25 23:51:38 2025] User: ha         | Action: REGISTERED new account
+[Thu Dec 25 23:51:42 2025] User: ha         | Action: LOGGED IN
+[Thu Dec 25 23:51:54 2025] User: ha         | Action: Joined a room
+[Thu Dec 25 23:52:01 2025] User: ha         | Action: Joined a room
+[Thu Dec 25 23:52:04 2025] User: ha         | Action: Joined a room
+[Thu Dec 25 23:52:07 2025] User: ha         | Action: Joined a room
+[Thu Dec 25 23:52:22 2025] User: ha         | Action: Placed a bid
+[Thu Dec 25 23:52:27 2025] User: linh       | Action: Joined a room
+[Thu Dec 25 23:52:30 2025] User: linh       | Action: Placed a bid
+[Thu Dec 25 23:52:37 2025] User: ha         | Action: Placed a bid
+[Thu Dec 25 23:52:49 2025] User: ha         | Action: Used BUY NOW
+[Thu Dec 25 23:52:58 2025] User: linh       | Action: Used BUY NOW
+[Fri Dec 26 10:34:58 2025] User: nam        | Action: LOGGED IN
+[Fri Dec 26 10:35:18 2025] User: nam        | Action: Created a room with queue management
+[Fri Dec 26 10:35:31 2025] User: nam        | Action: Added item to a room queue
+[Fri Dec 26 10:35:43 2025] User: nam        | Action: Added item to a room queue
+[Fri Dec 26 10:36:02 2025] User: nam        | Action: Deleted item 'pineapple' from Room 1
+[Fri Dec 26 10:36:20 2025] User: nam        | Action: Created a room with queue management
+[Fri Dec 26 10:36:26 2025] User: nam        | Action: Created a room with queue management
+[Fri Dec 26 10:36:41 2025] User: nam        | Action: Added item to a room queue
+[Fri Dec 26 10:38:14 2025] User: nam        | Action: Added item to a room queue
+[Fri Dec 26 10:38:20 2025] User: nam        | Action: Deleted item 'asfasf' from Room 3
+[Fri Dec 26 10:43:30 2025] User: nam        | Action: LOGGED IN
+[Fri Dec 26 10:43:45 2025] User: nam        | Action: Created a room with queue management
+[Fri Dec 26 10:43:55 2025] User: nam        | Action: Added item to a room queue
+[Fri Dec 26 10:44:01 2025] User: nam        | Action: Created a room with queue management
+[Fri Dec 26 10:44:10 2025] User: nam        | Action: Added item to a room queue
+[Fri Dec 26 10:44:16 2025] User: nam        | Action: Created a room with queue management
+[Fri Dec 26 10:44:36 2025] User: nam        | Action: Added item to a room queue
+[Fri Dec 26 10:44:48 2025] User: nam        | Action: Deleted item 'ga' from Room 2 queue
+[Fri Dec 26 10:45:05 2025] User: nam        | Action: Joined a room
+[Fri Dec 26 10:45:09 2025] User: nam        | Action: Used BUY NOW
+[Fri Dec 26 10:45:13 2025] User: nam        | Action: Used BUY NOW
+[Fri Dec 26 10:49:27 2025] User: nam        | Action: LOGGED IN
+[Fri Dec 26 10:49:36 2025] User: nam        | Action: Created a room with queue management
+[Fri Dec 26 10:49:44 2025] User: nam        | Action: Created a room with queue management
+[Fri Dec 26 10:49:58 2025] User: nam        | Action: Added item to a room queue
+[Fri Dec 26 10:50:05 2025] User: nam        | Action: Added item to a room queue
+[Fri Dec 26 10:50:14 2025] User: nam        | Action: Added item to a room queue
+[Fri Dec 26 10:50:24 2025] User: nam        | Action: Created a room with queue management
+[Fri Dec 26 10:50:33 2025] User: nam        | Action: Added item to a room queue
+[Fri Dec 26 10:50:44 2025] User: nam        | Action: Joined a room
+[Fri Dec 26 10:50:51 2025] User: nam        | Action: Used BUY NOW
+[Fri Dec 26 10:50:54 2025] User: nam        | Action: Used BUY NOW

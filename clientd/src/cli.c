@@ -1,5 +1,6 @@
 #include "server.h" // Đã bao gồm cJSON.h, framing.h, protocol.h, json_util.h...
 #include <ctype.h>
+#include "state.h"
 
 #define BUFFER_SIZE 4096
 
@@ -79,6 +80,21 @@ char* convert_command_to_json(char *input) {
             cJSON_Delete(req); return NULL;
         }
     }
+    // Lệnh xóa vật phẩm khỏi hàng chờ của phòng hiện tại
+    else if (strcmp(cmd, "delete") == 0) {
+        char *room_id_str = strtok(NULL, " ");
+        char *idx_str = strtok(NULL, " ");
+        
+        if (room_id_str && idx_str) {
+            cJSON_AddNumberToObject(req, "type", C2S_DELETE_ITEM); // 302
+            cJSON_AddNumberToObject(req, "room_id", atoi(room_id_str));
+            cJSON_AddNumberToObject(req, "item_index", atoi(idx_str));
+        } else {
+            printf(">> Sai cu phap! Dung: delete <room_id> <item_index>\n");
+            cJSON_Delete(req); return NULL;
+        }
+    }
+
     // --- LỆNH: JOIN room_id ---
     else if (strcmp(cmd, "join") == 0) {
         char *id_str = strtok(NULL, " ");
@@ -113,13 +129,28 @@ char* convert_command_to_json(char *input) {
     else if (strcmp(cmd, "list") == 0) {
         cJSON_AddNumberToObject(req, "type", C2S_LIST_ROOMS); // 201
     }
+
+    else if (strcmp(cmd, "search") == 0) {
+        char *keyword = strtok(NULL, " ");
+        if (keyword) {
+            cJSON_AddNumberToObject(req, "type", C2S_SEARCH_ITEM); // 205
+            cJSON_AddStringToObject(req, "keyword", keyword);
+        } else {
+            printf(">> Sai cu phap! Dung: search <tu_khoa>\n");
+            cJSON_Delete(req); return NULL;
+        }
+    }
+    // --- LỆNH: HISTORY ---
+    else if (strcmp(cmd, "history") == 0) {
+        cJSON_AddNumberToObject(req, "type", C2S_GET_HISTORY); // 501
+    }
     // --- HỖ TRỢ NHẬP JSON THÔ (Cho debug) ---
     else if (cmd[0] == '{') {
         cJSON_Delete(req);
         return strdup(input);
     }
     else {
-        printf(">> Lenh khong hop le! (register, login, create, additem, join, leave, bid, buynow, list)\n");
+        printf(">> Lenh khong hop le! (register, login, create, additem, join, leave, bid, buynow, delete, search, history, list)\n");
         cJSON_Delete(req);
         return NULL;
     }
@@ -208,6 +239,32 @@ void print_server_response(char *json_str) {
              printf("\n[ERROR] %s\n", get_json_string(json, "message"));
              break;
 
+        case S2C_SEARCH_RESULT:
+            printf("\n--- KET QUA TIM KIEM ---\n");
+            cJSON *res_arr = cJSON_GetObjectItem(json, "results");
+            cJSON *res;
+            cJSON_ArrayForEach(res, res_arr) {
+                printf("Phong #%d: %s | Gia: %d | [%s]\n", 
+                    (int)cJSON_GetNumberValue(cJSON_GetObjectItem(res, "room_id")),
+                    cJSON_GetStringValue(cJSON_GetObjectItem(res, "title")),
+                    (int)cJSON_GetNumberValue(cJSON_GetObjectItem(res, "start_price")),
+                    cJSON_GetStringValue(cJSON_GetObjectItem(res, "status")));
+            }
+            break;
+
+        case S2C_HISTORY_LIST:
+            printf("\n--- LICH SU THANG DAU GIA CUA BAN ---\n");
+            cJSON *h_arr = cJSON_GetObjectItem(json, "history");
+            cJSON *h;
+            cJSON_ArrayForEach(h, h_arr) {
+                time_t t = (time_t)cJSON_GetNumberValue(cJSON_GetObjectItem(h, "time"));
+                printf("- %s | Gia: %d | Ngay: %s", 
+                    cJSON_GetStringValue(cJSON_GetObjectItem(h, "item")),
+                    (int)cJSON_GetNumberValue(cJSON_GetObjectItem(h, "price")),
+                    ctime(&t));
+            }
+            break;
+
         default:
             printf("SERVER: %s\n", json_str);
     }
@@ -245,7 +302,7 @@ int main(int argc, char *argv[]) {
     }
 
     printf("=== AUCTION CLIENT (C VERSION) ===\n");
-    printf("Commands: register, login, create, list, join, bid, buynow\n"); // Cập nhật danh sách lệnh
+    printf("Commands: register, login, create, additem, list, join, leave, bid, buynow, delete, search, history\n"); // Cập nhật danh sách lệnh
     printf("YOU> ");
     fflush(stdout);
 
@@ -295,3 +352,4 @@ int main(int argc, char *argv[]) {
     close(sockfd);
     return 0;
 }
+
