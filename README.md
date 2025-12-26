@@ -64,6 +64,8 @@ make
 
 ### 2. Chạy Server
 
+Mở một terminal mới:
+
 ```bash
 cd server
 make clean
@@ -154,6 +156,7 @@ Sau khi khởi chạy Client, bạn có thể sử dụng các lệnh sau:
 **Project:** 
 
 ---
+
 
 
 
