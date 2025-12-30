@@ -80,3 +80,47 @@
 [Fri Dec 26 10:50:51 2025] User: nam        | Action: Used BUY NOW
 [Fri Dec 26 10:50:54 2025] User: nam        | Action: Used BUY NOW
 [Fri Dec 26 11:04:57 2025] User: nam        | Action: LOGGED IN
+[Mon Dec 29 17:00:43 2025] User: nam        | Action: LOGGED IN
+[Mon Dec 29 17:01:14 2025] User: ha         | Action: LOGGED IN
+[Mon Dec 29 17:02:08 2025] User: ha         | Action: Created a room with queue management
+[Mon Dec 29 17:03:02 2025] User: ha         | Action: Added item to a room queue
+[Mon Dec 29 17:03:16 2025] User: ha         | Action: Created a room with queue management
+[Mon Dec 29 17:04:10 2025] User: nam        | Action: Joined a room
+[Mon Dec 29 17:04:35 2025] User: linh       | Action: LOGGED IN
+[Mon Dec 29 17:04:39 2025] User: linh       | Action: Joined a room
+[Mon Dec 29 17:04:54 2025] User: linh       | Action: Used BUY NOW
+[Mon Dec 29 17:05:22 2025] User: nam        | Action: Used BUY NOW
+[Tue Dec 30 19:22:36 2025] User: nam        | Action: LOGGED IN
+[Tue Dec 30 19:22:52 2025] User: ha         | Action: LOGGED IN
+[Tue Dec 30 19:23:01 2025] User: ha         | Action: Created a room with queue management
+[Tue Dec 30 19:23:08 2025] User: ha         | Action: Joined a room
+[Tue Dec 30 19:23:13 2025] User: nam        | Action: Joined a room
+[Tue Dec 30 19:23:45 2025] User: ha         | Action: Placed a valid bid
+[Tue Dec 30 21:58:49 2025] User: nam        | Action: LOGGED IN
+[Tue Dec 30 21:59:00 2025] User: ha         | Action: LOGGED IN
+[Tue Dec 30 22:00:17 2025] User: nam        | Action: Created a room with queue management
+[Tue Dec 30 22:00:37 2025] User: linh       | Action: LOGGED IN
+[Tue Dec 30 22:04:32 2025] User: ha         | Action: LOGGED IN
+[Tue Dec 30 22:04:43 2025] User: nam        | Action: LOGGED IN
+[Tue Dec 30 22:04:52 2025] User: linh       | Action: LOGGED IN
+[Tue Dec 30 22:06:06 2025] User: nam        | Action: Created a room with queue management
+[Tue Dec 30 22:06:23 2025] User: ha         | Action: Joined a room
+[Tue Dec 30 22:06:28 2025] User: nam        | Action: Joined a room
+[Tue Dec 30 22:14:08 2025] User: linh       | Action: LOGGED IN
+[Tue Dec 30 22:14:24 2025] User: nam        | Action: LOGGED IN
+[Tue Dec 30 22:14:32 2025] User: nam        | Action: Created a room with queue management
+[Tue Dec 30 22:27:57 2025] User: nam        | Action: LOGGED IN
+[Tue Dec 30 22:28:17 2025] User: linh       | Action: LOGGED IN
+[Tue Dec 30 22:28:28 2025] User: ha         | Action: LOGGED IN
+[Tue Dec 30 22:30:04 2025] User: ha         | Action: LOGGED IN
+[Tue Dec 30 22:31:03 2025] User: nam        | Action: LOGGED IN
+[Tue Dec 30 22:31:08 2025] User: linh       | Action: LOGGED IN
+[Tue Dec 30 22:31:24 2025] User: linh       | Action: Created a room with queue management
+[Tue Dec 30 22:31:29 2025] User: nam        | Action: Joined a room
+[Tue Dec 30 22:31:31 2025] User: nam        | Action: Used BUY NOW
+[Tue Dec 30 22:42:19 2025] User: nam        | Action: LOGGED IN
+[Tue Dec 30 22:42:24 2025] User: linh       | Action: LOGGED IN
+[Tue Dec 30 22:42:30 2025] User: ha         | Action: LOGGED IN
+[Tue Dec 30 22:43:28 2025] User: linh       | Action: Created a room with queue management
+[Tue Dec 30 22:43:34 2025] User: nam        | Action: Joined a room
+[Tue Dec 30 22:43:37 2025] User: nam        | Action: Used BUY NOW

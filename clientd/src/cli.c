@@ -4,6 +4,9 @@
 
 #define BUFFER_SIZE 4096
 
+// Biến lưu trữ vai trò của người dùng hiện tại (0: Chưa đăng nhập)
+static int current_role = 0;
+
 // Hàm xóa khoảng trắng thừa đầu/cuối (trim)
 void trim(char *s) {
     char *p = s;
@@ -15,21 +18,27 @@ void trim(char *s) {
 
 // Hàm chuyển đổi lệnh người dùng nhập -> Chuỗi JSON gửi Server
 char* convert_command_to_json(char *input) {
-    char *cmd = strtok(input, " ");
+    // Sử dụng buffer tạm để strtok không làm hỏng chuỗi gốc nếu cần dùng lại
+    char tmp[BUFFER_SIZE];
+    strncpy(tmp, input, BUFFER_SIZE);
+    
+    char *cmd = strtok(tmp, " ");
     if (!cmd) return NULL;
 
     cJSON *req = cJSON_CreateObject();
     
-    // --- LỆNH: REGISTER user pass ---
+    // --- LỆNH: REGISTER user pass role ---
     if (strcmp(cmd, "register") == 0) {
         char *user = strtok(NULL, " ");
         char *pass = strtok(NULL, " ");
-        if (user && pass) {
+        char *role_str = strtok(NULL, " ");
+        if (user && pass && role_str) {
             cJSON_AddNumberToObject(req, "type", C2S_REGISTER); // 101
             cJSON_AddStringToObject(req, "user", user);
             cJSON_AddStringToObject(req, "pass", pass);
+            cJSON_AddNumberToObject(req, "role", atoi(role_str));
         } else {
-            printf(">> Sai cu phap! Dung: register <user> <pass>\n");
+            printf(">> Sai cu phap! Dung: register <user> <pass> <role: 1-Bidder, 2-Auctioneer, 3-Admin>\n");
             cJSON_Delete(req); return NULL;
         }
     }
@@ -47,7 +56,6 @@ char* convert_command_to_json(char *input) {
         }
     }
     // --- LỆNH: CREATE title start_price buy_now_price ---
-    // Khởi tạo phòng đấu giá với vật phẩm đầu tiên
     else if (strcmp(cmd, "create") == 0) {
         char *title = strtok(NULL, " ");
         char *price_str = strtok(NULL, " ");
@@ -63,7 +71,6 @@ char* convert_command_to_json(char *input) {
         }
     }
     // --- LỆNH: ADDITEM room_id title start_price buy_now_price ---
-    // Thêm vật phẩm vào hàng chờ của một phòng cụ thể (Queue Management)
     else if (strcmp(cmd, "additem") == 0) {
         char *room_id_str = strtok(NULL, " ");
         char *title = strtok(NULL, " ");
@@ -150,7 +157,16 @@ char* convert_command_to_json(char *input) {
         return strdup(input);
     }
     else {
-        printf(">> Lenh khong hop le! (register, login, create, additem, join, leave, bid, buynow, delete, search, history, list)\n");
+        // Hiển thị thông báo lỗi dựa trên vai trò hiện tại
+        if (current_role == 0) {
+            printf(">> Lenh khong hop le! Cac lenh co san: register, login\n");
+        } else if (current_role == ROLE_ADMIN) {
+            printf(">> Lenh khong hop le! (Admin: delete, list, join, leave, search, history)\n");
+        } else if (current_role == ROLE_AUCTIONEER) {
+            printf(">> Lenh khong hop le! (Auctioneer: create, additem, delete, list, join, leave, search, history)\n");
+        } else {
+            printf(">> Lenh khong hop le! (Bidder: list, join, leave, bid, buynow, search, history)\n");
+        }
         cJSON_Delete(req);
         return NULL;
     }
@@ -177,9 +193,23 @@ void print_server_response(char *json_str) {
             printf("\n[SUCCESS] %s\n", get_json_string(json, "message"));
             break;
 
-        case S2C_LOGIN_SUCCESS:
-            printf("\n[SUCCESS] Dang nhap thanh cong!\n");
+        case S2C_LOGIN_SUCCESS: {
+            current_role = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(json, "role"));
+            printf("\n[SUCCESS] Dang nhap thanh cong với vai tro: %s!\n", 
+                (current_role == ROLE_ADMIN) ? "ADMIN" : 
+                (current_role == ROLE_AUCTIONEER) ? "AUCTIONEER" : "BIDDER");
+            
+            // Hiển thị hướng dẫn lệnh tương ứng với vai trò
+            printf("Cac lenh hop le cho ban:\n");
+            if (current_role == ROLE_ADMIN) {
+                printf(" -> delete <room_id> <item_idx>, list, join <id>, leave, search <key>, history\n");
+            } else if (current_role == ROLE_AUCTIONEER) {
+                printf(" -> create <title> <p> <buy>, additem <room> <title> <p> <buy>, delete, list, join, leave, search, history\n");
+            } else {
+                printf(" -> list, join <id>, leave, bid <price>, buynow, search <key>, history\n");
+            }
             break;
+        }
 
         case S2C_ROOM_LIST:
             printf("\n======= DANH SACH PHONG & HANG CHO =======\n");
@@ -189,8 +219,9 @@ void print_server_response(char *json_str) {
                 int id = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(r, "id"));
                 int cur_p = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(r, "current_price"));
                 int cur_idx = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(r, "current_idx"));
+                char *owner = cJSON_GetStringValue(cJSON_GetObjectItem(r, "owner"));
                 
-                printf("\n[PHONG #%d] - Gia hien tai: %d\n", id, cur_p);
+                printf("\n[PHONG #%d] - Chu phong: %s - Gia hien tai: %d\n", id, owner ? owner : "Unknown", cur_p);
                 printf("  Danh sach hang cho:\n");
                 
                 cJSON *queue = cJSON_GetObjectItem(r, "queue");
@@ -224,14 +255,14 @@ void print_server_response(char *json_str) {
             break;
 
         case S2C_AUCTION_ENDED:
-             printf("\n>>> [KET THUC] Vat pham '%s' da co chu!\n", get_json_string(json, "item_title"));
+             printf("\n>>> [KET THUC] Phien dau gia vat pham '%s' da ket thuc!\n", get_json_string(json, "item_title"));
              printf("    Nguoi thang: %s - Gia cuoi: %d\n", 
-                   get_json_string(json, "winner"), 
+                   get_json_string(json, "winner") ? get_json_string(json, "winner") : "None", 
                    (int)cJSON_GetNumberValue(cJSON_GetObjectItem(json, "final_price")));
             break;
 
         case S2C_TIME_ALERT:
-            printf("\n>>> [CANH BAO] Phien dau gia con %d giay nua!\n", 
+            printf("\n>>> [THONG BAO] Phien dau gia con %d giay nua!\n", 
                    (int)cJSON_GetNumberValue(cJSON_GetObjectItem(json, "time_left")));
             break;
 
@@ -253,15 +284,22 @@ void print_server_response(char *json_str) {
             break;
 
         case S2C_HISTORY_LIST:
-            printf("\n--- LICH SU THANG DAU GIA CUA BAN ---\n");
+            // Phân loại tiêu đề hiển thị theo vai trò
+            if (current_role == ROLE_ADMIN) printf("\n--- NHAT KY GIAO DICH TOAN HE THONG (ADMIN) ---\n");
+            else if (current_role == ROLE_AUCTIONEER) printf("\n--- LICH SU CAC MAT HANG BAN DA BAN ---\n");
+            else printf("\n--- LICH SU CAC PHIEN BAN DA THANG ---\n");
+
             cJSON *h_arr = cJSON_GetObjectItem(json, "history");
             cJSON *h;
             cJSON_ArrayForEach(h, h_arr) {
                 time_t t = (time_t)cJSON_GetNumberValue(cJSON_GetObjectItem(h, "time"));
-                printf("- %s | Gia: %d | Ngay: %s", 
+                char *time_s = ctime(&t); time_s[strlen(time_s)-1] = '\0';
+                char *winner_str = cJSON_GetStringValue(cJSON_GetObjectItem(h, "winner"));
+                printf("- [%s] Vat pham: %-15s | Gia: %-8d | Thang: %s\n", 
+                    time_s,
                     cJSON_GetStringValue(cJSON_GetObjectItem(h, "item")),
                     (int)cJSON_GetNumberValue(cJSON_GetObjectItem(h, "price")),
-                    ctime(&t));
+                    winner_str ? winner_str : "None");
             }
             break;
 
@@ -302,7 +340,7 @@ int main(int argc, char *argv[]) {
     }
 
     printf("=== AUCTION CLIENT (C VERSION) ===\n");
-    printf("Commands: register, login, create, additem, list, join, leave, bid, buynow, delete, search, history\n"); // Cập nhật danh sách lệnh
+    printf("Chua dang nhap. Hay su dung: register <u] <p> <role] hoac login <u] <p>\n");
     printf("YOU> ");
     fflush(stdout);
 
@@ -352,4 +390,3 @@ int main(int argc, char *argv[]) {
     close(sockfd);
     return 0;
 }
-

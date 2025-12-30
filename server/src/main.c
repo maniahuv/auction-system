@@ -80,18 +80,20 @@ void check_auctions() {
           }
         }
 
-        // === VỊ TRÍ SỬA: Lưu lịch sử NGAY TẠI ĐÂY (Cho tất cả các món) ===
+        // === VỊ TRÍ SỬA: Lưu lịch sử kèm theo owner_username (Cho tất cả các món) ===
         if (r->highest_bidder_id != -1) {
             FILE *hf = fopen("history.txt", "a");
             if (hf) {
-                // Ghi: tên_user:tên_vật_phẩm:giá_cuối:thời_gian
-                fprintf(hf, "%s:%s:%d:%ld\n", 
+                // Định dạng: winner_name:item_title:final_price:timestamp:owner_username
+                // Việc lưu owner_username giúp Admin và Auctioneer lọc được dữ liệu chính xác
+                fprintf(hf, "%s:%s:%d:%ld:%s\n", 
                         winner_name, 
                         r->queue[r->current_item_idx].title, 
                         r->current_price, 
-                        (long)time(NULL));
+                        (long)time(NULL),
+                        r->owner_username);
                 fclose(hf);
-                printf("[History] Saved: %s won %s\n", winner_name, r->queue[r->current_item_idx].title);
+                printf("[History] Saved: %s won %s (Seller: %s)\n", winner_name, r->queue[r->current_item_idx].title, r->owner_username);
             }
         }
 
@@ -114,7 +116,7 @@ void check_auctions() {
           r->current_item_idx++; 
           r->current_price = r->queue[r->current_item_idx].start_price;
           r->highest_bidder_id = -1;
-          r->end_time = 0;       
+          r->end_time = now + 60; // Tự động bắt đầu món tiếp theo với 60 giây (có thể điều chỉnh)
           r->sent_warning = 0;   
 
           // Thông báo vật phẩm mới
@@ -132,6 +134,7 @@ void check_auctions() {
           // Hết món -> Đóng phòng
           r->is_active = 0;
           r->room_id = 0; // Giải phóng slot phòng
+          memset(r->owner_username, 0, 50);
           printf("[Timer] Room ended and cleaned up.\n");
         }
       }

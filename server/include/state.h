@@ -11,6 +11,7 @@
 typedef struct {
   int fd;              // Socket file descriptor
   char username[50];
+  int role;
   int is_logged_in;
   int current_room_id; // -1 nếu chưa vào phòng
 } UserState;
@@ -25,6 +26,7 @@ typedef struct {
 typedef struct {
   int room_id;
   int is_active;
+  char owner_username[50];
   
   // --- QUẢN LÝ HÀNG CHỜ ---
   AuctionItem queue[MAX_ITEMS_PER_ROOM]; // Danh sách các vật phẩm chờ đấu giá

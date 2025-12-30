@@ -48,15 +48,18 @@ char *handle_register(int fd, cJSON *json) {
     (void)fd; // Unused parameter
     const char *user = get_json_string(json, "user");
     const char *pass = get_json_string(json, "pass");
+    int role = 1; // Mặc định là Bidder (1) nếu không gửi role
+    get_json_int(json, "role", &role);
 
     if (!user || !pass) return create_error_response(ERR_INVALID_MESSAGE, "Missing user or pass");
 
     // Kiểm tra xem user đã tồn tại chưa
     FILE *f = fopen("accounts.txt", "r");
     char line[100], existing_user[50], existing_pass[50];
+    int r;
     if (f) {
         while (fgets(line, sizeof(line), f)) {
-            if (sscanf(line, "%[^:]:%s", existing_user, existing_pass) == 2) {
+            if (sscanf(line, "%[^:]:%[^:]:%d", existing_user, existing_pass, &r) >= 2) {
                 if (strcmp(existing_user, user) == 0) {
                     fclose(f);
                     return create_error_response(ERR_USER_EXISTS, "Username already exists");
@@ -66,10 +69,10 @@ char *handle_register(int fd, cJSON *json) {
         fclose(f);
     }
 
-    // Ghi tài khoản mới vào file
+    // Ghi tài khoản mới vào file theo định dạng user:pass:role
     f = fopen("accounts.txt", "a");
     if (!f) return create_error_response(ERR_UNKNOWN, "Internal server error (file)");
-    fprintf(f, "%s:%s\n", user, pass);
+    fprintf(f, "%s:%s:%d\n", user, pass, role);
     fclose(f);
 
     log_activity(user, "REGISTERED new account");
@@ -84,9 +87,11 @@ char *handle_login(int fd, cJSON *json) {
     if (!f) return create_error_response(ERR_USER_NOT_FOUND, "No accounts found. Please register first.");
 
     char line[100], u[50], p[50];
+    int role_val = 1;
     int found = 0;
     while (fgets(line, sizeof(line), f)) {
-        if (sscanf(line, "%[^:]:%s", u, p) == 2) {
+        // Đọc thêm role từ file accounts.txt
+        if (sscanf(line, "%[^:]:%[^:]:%d", u, p, &role_val) >= 2) {
             if (strcmp(u, user) == 0 && strcmp(p, pass) == 0) {
                 found = 1; break;
             }
@@ -99,62 +104,76 @@ char *handle_login(int fd, cJSON *json) {
         if (u_ptr) {
             strcpy(u_ptr->username, user);
             u_ptr->is_logged_in = 1;
+            u_ptr->role = role_val; // Gán quyền cho session
         }
         log_activity(user, "LOGGED IN");
         
         cJSON *resp = cJSON_CreateObject();
         cJSON_AddNumberToObject(resp, "type", S2C_LOGIN_SUCCESS);
+        cJSON_AddNumberToObject(resp, "role", role_val);
         return cJSON_PrintUnformatted(resp);
     }
     return create_error_response(ERR_WRONG_PASSWORD, "Invalid username or password");
 }
 
+// Logic dat gia bid
 char *handle_bid(int fd, cJSON *json) {
-  UserState *u = get_user_by_fd(fd);
-  if (!u || !u->is_logged_in)
-    return create_error_response(ERR_UNKNOWN, "Login required");
+    UserState *u = get_user_by_fd(fd);
+    if (!u || !u->is_logged_in)
+        return create_error_response(ERR_UNKNOWN, "Login required");
 
-  if (u->current_room_id == -1)
-    return create_error_response(ERR_UNKNOWN, "You are not in any room");
+    // KIỂM TRA QUYỀN: Chỉ Bidder mới được đặt giá
+    if (u->role != ROLE_BIDDER)
+        return create_error_response(ERR_UNKNOWN, "Only Bidders can place bids");
 
-  int price = 0;
-  get_json_int(json, "price", &price); // Client gửi lên giá muốn đặt
+    if (u->current_room_id == -1)
+        return create_error_response(ERR_UNKNOWN, "You are not in any room");
 
-  // Tìm phòng user đang ở (ID phòng là index + 1)
-  RoomState *room = &rooms[u->current_room_id - 1];
+    int price = 0;
+    get_json_int(json, "price", &price);
 
-  if (!room || !room->is_active)
-    return create_error_response(ERR_UNKNOWN, "Auction is not active");
+    RoomState *room = &rooms[u->current_room_id - 1];
 
-  // LOGIC KIỂM TRA GIÁ: Phải cao hơn giá hiện tại
-  if (price <= room->current_price) {
-    return create_error_response(ERR_BID_TOO_LOW,
-                                 "Price must be higher than current price");
-  }
+    if (!room || !room->is_active)
+        return create_error_response(ERR_UNKNOWN, "Auction is not active");
 
-  // CẬP NHẬT TRẠNG THÁI
-  room->current_price = price;
-  room->highest_bidder_id = u->fd; 
+    // 1. KIỂM TRA BƯỚC GIÁ: Phải cao hơn ít nhất MIN_BID_STEP (10,000)
+    if (price < (room->current_price + MIN_BID_STEP)) {
+        char err_msg[100];
+        snprintf(err_msg, sizeof(err_msg), "Gia phai cao hon gia hien tai it nhat %d VND", MIN_BID_STEP);
+        return create_error_response(ERR_BID_TOO_LOW, err_msg);
+    }
 
-  time_t now = time(NULL);
-  room->end_time = now + 30;
-  room->sent_warning = 0; // Reset cờ cảnh báo cho lượt bid mới
+    // 2. CẬP NHẬT TRẠNG THÁI
+    room->current_price = price;
+    room->highest_bidder_id = u->fd; 
 
-  log_activity(u->username, "Placed a bid"); 
+    // 3. LOGIC RESET THỜI GIAN: 
+    // Nếu có giá thầu mới trong 30 giây cuối, đặt lại đồng hồ về 30 giây
+    time_t now = time(NULL);
+    double time_left = difftime(room->end_time, now);
+    
+    if (time_left < 30.0) {
+        room->end_time = now + 30; // Reset về 30 giây
+        room->sent_warning = 0;    // Reset cờ để hệ thống có thể gửi lại cảnh báo 30s sau đó
+        printf("[Timer] Room %d: Timer reset to 30s due to new bid\n", room->room_id);
+    }
 
-  // BROADCAST cho cả phòng
-  cJSON *bc = cJSON_CreateObject();
-  cJSON_AddNumberToObject(bc, "type", S2C_NEW_BID); 
-  cJSON_AddNumberToObject(bc, "room_id", room->room_id);
-  cJSON_AddNumberToObject(bc, "current_price", room->current_price);
-  cJSON_AddStringToObject(bc, "bidder", u->username);
+    log_activity(u->username, "Placed a valid bid"); 
 
-  char *s_bc = cJSON_PrintUnformatted(bc);
-  broadcast_to_room(room->room_id, s_bc);
-  free(s_bc);
-  cJSON_Delete(bc);
+    // 4. BROADCAST cho cả phòng (Giữ nguyên logic cũ của bạn)
+    cJSON *bc = cJSON_CreateObject();
+    cJSON_AddNumberToObject(bc, "type", S2C_NEW_BID); 
+    cJSON_AddNumberToObject(bc, "room_id", room->room_id);
+    cJSON_AddNumberToObject(bc, "current_price", room->current_price);
+    cJSON_AddStringToObject(bc, "bidder", u->username);
 
-  return create_ok_response();
+    char *s_bc = cJSON_PrintUnformatted(bc);
+    broadcast_to_room(room->room_id, s_bc);
+    free(s_bc);
+    cJSON_Delete(bc);
+
+    return create_ok_response();
 }
 
 // Hàm xử lý: TẠO PHÒNG
@@ -162,6 +181,17 @@ char *handle_create_room(int fd, cJSON *json) {
   UserState *u = get_user_by_fd(fd);
   if (!u || !u->is_logged_in)
     return create_error_response(ERR_UNKNOWN, "Login required");
+
+  // KIỂM TRA QUYỀN: Chỉ Auctioneer mới được tạo phòng
+  if (u->role != ROLE_AUCTIONEER)
+    return create_error_response(ERR_UNKNOWN, "Only Auctioneers can create rooms");
+
+  // GIỚI HẠN: Mỗi Auctioneer chỉ được tạo 1 phòng đang hoạt động
+  for (int j = 0; j < MAX_ROOMS; j++) {
+      if (rooms[j].is_active && strcmp(rooms[j].owner_username, u->username) == 0) {
+          return create_error_response(ERR_UNKNOWN, "You already have an active room");
+      }
+  }
 
   const char *title = get_json_string(json, "title");
   int start_price = 0;
@@ -176,6 +206,7 @@ char *handle_create_room(int fd, cJSON *json) {
     if (rooms[i].room_id == 0) { 
       rooms[i].room_id = i + 1;
       rooms[i].is_active = 1;    
+      strncpy(rooms[i].owner_username, u->username, 49); // Lưu chủ phòng
       
       // --- LOGIC HÀNG CHỜ ---
       strncpy(rooms[i].queue[0].title, title, 99);
@@ -187,7 +218,7 @@ char *handle_create_room(int fd, cJSON *json) {
 
       rooms[i].current_price = start_price;
       rooms[i].highest_bidder_id = -1;
-      rooms[i].end_time = 0; 
+      rooms[i].end_time = time(NULL) + 60; // Mặc định phiên đầu tiên 60s
       rooms[i].sent_warning = 0; 
 
       u->current_room_id = rooms[i].room_id;
@@ -218,6 +249,7 @@ char *handle_list_rooms(int fd) {
             cJSON_AddNumberToObject(item_room, "id", rooms[i].room_id);
             cJSON_AddNumberToObject(item_room, "current_price", rooms[i].current_price);
             cJSON_AddNumberToObject(item_room, "current_idx", rooms[i].current_item_idx);
+            cJSON_AddStringToObject(item_room, "owner", rooms[i].owner_username);
 
             // Thêm danh sách vật phẩm trong hàng chờ của phòng này
             cJSON *queue_arr = cJSON_CreateArray();
@@ -244,6 +276,9 @@ char *handle_join_room(int fd, cJSON *json) {
   UserState *u = get_user_by_fd(fd);
   if (!u || !u->is_logged_in)
     return create_error_response(ERR_UNKNOWN, "Login required");
+
+  // KIỂM TRA QUYỀN: Bidder mới cần join phòng để đấu giá
+  // Auctioneer và Admin có thể join để xem/quản lý
 
   int room_id = 0;
   get_json_int(json, "room_id", &room_id);
@@ -280,6 +315,10 @@ char *handle_buy_now(int fd, cJSON *json) {
     if (!u || !u->is_logged_in || u->current_room_id == -1)
         return create_error_response(ERR_UNKNOWN, "Action not allowed");
 
+    // KIỂM TRA QUYỀN: Chỉ Bidder mới được mua ngay
+    if (u->role != ROLE_BIDDER)
+        return create_error_response(ERR_UNKNOWN, "Only Bidders can use Buy Now");
+
     RoomState *room = &rooms[u->current_room_id - 1];
 
     // SỬA LỖI: Lấy buy_now_price từ vật phẩm hiện tại trong hàng chờ
@@ -311,6 +350,12 @@ char *handle_add_item(int fd, cJSON *json) {
         return create_error_response(ERR_ROOM_NOT_FOUND, "Room not found or inactive");
 
     RoomState *r = &rooms[room_id - 1];
+
+    // KIỂM TRA QUYỀN: Chỉ chủ phòng (Auctioneer) mới được thêm món vào hàng chờ
+    if (u->role != ROLE_ADMIN && strcmp(r->owner_username, u->username) != 0) {
+        return create_error_response(ERR_UNKNOWN, "You are not the owner of this room");
+    }
+
     if (r->total_items >= MAX_ITEMS_PER_ROOM)
         return create_error_response(ERR_UNKNOWN, "Queue full for this room");
 
@@ -335,7 +380,10 @@ char *handle_add_item(int fd, cJSON *json) {
     cJSON *notif = cJSON_CreateObject();
     cJSON_AddNumberToObject(notif, "type", S2C_GENERIC_OK);
     cJSON_AddStringToObject(notif, "message", "A new item was added to the queue");
-    broadcast_to_room(r->room_id, cJSON_PrintUnformatted(notif));
+    char *s_notif = cJSON_PrintUnformatted(notif);
+    broadcast_to_room(r->room_id, s_notif);
+    free(s_notif);
+    cJSON_Delete(notif);
 
     return create_ok_response();
 }
@@ -356,6 +404,12 @@ char *handle_delete_item(int fd, cJSON *json) {
     }
 
     RoomState *r = &rooms[room_id - 1];
+
+    // KIỂM TRA QUYỀN: Admin hoặc Chủ phòng mới có quyền xóa
+    if (u->role != ROLE_ADMIN && strcmp(r->owner_username, u->username) != 0) {
+        return create_error_response(ERR_UNKNOWN, "Unauthorized to delete items in this room");
+    }
+
     int real_idx = item_idx - 1;
 
     // Kiểm tra tính hợp lệ: không được xóa món đang đấu giá hoặc đã đấu giá xong
@@ -387,7 +441,7 @@ char *handle_delete_item(int fd, cJSON *json) {
     return create_ok_response();
 }
 
-// Hàm xem lịch sử đấu giá của chính mình
+// Hàm xem lịch sử đấu giá (Phân quyền Admin/Auctioneer/Bidder)
 char *handle_get_history(int fd) {
     UserState *u = get_user_by_fd(fd);
     if (!u || !u->is_logged_in) return create_error_response(ERR_UNKNOWN, "Login required");
@@ -398,16 +452,26 @@ char *handle_get_history(int fd) {
 
     FILE *f = fopen("history.txt", "r");
     if (f) {
-        char line[256], user[50], item[100];
+        char line[256], winner[50], item[100], owner[50];
         int price; long ts;
         while (fgets(line, sizeof(line), f)) {
-            if (sscanf(line, "%[^:]:%[^:]:%d:%ld", user, item, &price, &ts) == 4) {
-                // Chỉ lấy lịch sử của chính user đó
-                if (strcmp(user, u->username) == 0) {
+            // Đọc định dạng mới: winner:item:price:timestamp:owner
+            int res = sscanf(line, "%[^:]:%[^:]:%d:%ld:%s", winner, item, &price, &ts, owner);
+            if (res >= 4) {
+                int should_add = 0;
+                // Admin: Thấy tất cả giao dịch
+                if (u->role == ROLE_ADMIN) should_add = 1;
+                // Bidder: Thấy món mình thắng
+                else if (u->role == ROLE_BIDDER && strcmp(winner, u->username) == 0) should_add = 1;
+                // Auctioneer: Thấy món mình đã bán (cần res == 5 để đảm bảo có field owner)
+                else if (u->role == ROLE_AUCTIONEER && res == 5 && strcmp(owner, u->username) == 0) should_add = 1;
+
+                if (should_add) {
                     cJSON *h_item = cJSON_CreateObject();
                     cJSON_AddStringToObject(h_item, "item", item);
                     cJSON_AddNumberToObject(h_item, "price", price);
                     cJSON_AddNumberToObject(h_item, "time", ts);
+                    cJSON_AddStringToObject(h_item, "winner", winner); 
                     cJSON_AddItemToArray(h_list, h_item);
                 }
             }

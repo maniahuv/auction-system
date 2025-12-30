@@ -67,5 +67,11 @@ typedef enum {
     // ... 
 } ErrorCode;
 
+typedef enum {
+    ROLE_BIDDER = 1,
+    ROLE_AUCTIONEER = 2,
+    ROLE_ADMIN = 3
+} UserRole;
+
 #endif
 
