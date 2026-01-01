@@ -1,137 +1,12 @@
 #include "server.h"
 #include "state.h"
 #include "handlers.h"
-#include "db_manager.h" // Đã thêm include để sử dụng Database
+#include "db_manager.h" 
+#include "user_manager.h"
+#include "auction_engine.h"
 
 UserState users[MAX_USERS];
 RoomState rooms[MAX_ROOMS];
-
-// Quan ly ket noi
-
-// Khoi tao slot cho user moi ket noi
-void init_user(int fd) {
-  for (int i = 0; i < MAX_USERS; i++) {
-    if (users[i].fd == 0) { // Tim slot trung
-      users[i].fd = fd;
-      memset(users[i].username, 0, 50);
-      users[i].is_logged_in = 0;
-      users[i].current_room_id = -1;
-      printf("[System] Init state for fd %d at slot %d\n", fd, i);
-      return;
-    }
-  }
-  printf("[Warning] Server full, cannot init user for fd %d\n", fd);
-}
-
-// Xoa khi user ngat ket noi
-void clear_user(int fd) {
-  for (int i = 0; i < MAX_USERS; i++) {
-    if (users[i].fd == fd) {
-      printf("[System] Clearing state for User '%s' (fd %d)\n",
-             users[i].username, fd);
-      users[i].fd = 0;
-      users[i].is_logged_in = 0;
-      users[i].current_room_id = -1;
-      return;
-    }
-  }
-}
-
-void check_auctions() {
-  time_t now = time(NULL);
-
-  for (int i = 0; i < MAX_ROOMS; i++) {
-    RoomState *r = &rooms[i];
-
-    // Chỉ kiểm tra phòng đang hoạt động và đã bắt đầu đếm giờ (end_time > 0)
-    if (r->is_active && r->end_time > 0) {
-      double diff = difftime(r->end_time, now);
-
-      // --- 1. LOGIC CẢNH BÁO 30 GIÂY ---
-      if (diff <= 30.0 && diff > 0 && r->sent_warning == 0) {
-        r->sent_warning = 1; // Đánh dấu đã gửi cảnh báo
-
-        cJSON *alert = cJSON_CreateObject();
-        cJSON_AddNumberToObject(alert, "type", S2C_TIME_ALERT); // Mã 905
-        cJSON_AddNumberToObject(alert, "room_id", r->room_id);
-        cJSON_AddStringToObject(alert, "message", "CẢNH BÁO: Phiên đấu giá chỉ còn 30 giây cuối cùng!");
-        cJSON_AddNumberToObject(alert, "time_left", (int)diff);
-
-        char *s_alert = cJSON_PrintUnformatted(alert);
-        broadcast_to_room(r->room_id, s_alert);
-        
-        printf("[Timer] Room %d: Sent 30s time alert\n", r->room_id);
-        
-        free(s_alert);
-        cJSON_Delete(alert);
-      }
-
-      // --- 2. LOGIC KẾT THÚC VẬT PHẨM HIỆN TẠI ---
-      if (diff <= 0) {
-        printf("[Timer] Item '%s' in Room %d ended!\n", r->queue[r->current_item_idx].title, r->room_id);
-
-        // Tìm tên người thắng cuộc
-        char winner_name[50] = "Không có";
-        if (r->highest_bidder_id != -1) {
-          for (int u = 0; u < MAX_USERS; u++) {
-            if (users[u].fd == r->highest_bidder_id) {
-              strcpy(winner_name, users[u].username);
-              break;
-            }
-          }
-        }
-
-        // === VỊ TRÍ SỬA: Lưu lịch sử vào DATABASE thay vì file txt ===
-        if (r->highest_bidder_id != -1) {
-            db_save_auction_result(winner_name, r->queue[r->current_item_idx].title, r->current_price, r->owner_username);
-            printf("[History] Saved to DB: %s won %s (Seller: %s)\n", winner_name, r->queue[r->current_item_idx].title, r->owner_username);
-        }
-
-        // Thông báo kết thúc cho vật phẩm (Broadcast)
-        cJSON *msg = cJSON_CreateObject();
-        cJSON_AddNumberToObject(msg, "type", S2C_AUCTION_ENDED); 
-        cJSON_AddNumberToObject(msg, "room_id", r->room_id);
-        cJSON_AddStringToObject(msg, "item_title", r->queue[r->current_item_idx].title);
-        cJSON_AddStringToObject(msg, "winner", winner_name);
-        cJSON_AddNumberToObject(msg, "final_price", r->current_price);
-
-        char *s = cJSON_PrintUnformatted(msg);
-        broadcast_to_room(r->room_id, s);
-        free(s);
-        cJSON_Delete(msg);
-
-        // --- 3. CHUYỂN MÓN HOẶC ĐÓNG PHÒNG ---
-        if (r->current_item_idx + 1 < r->total_items) {
-          // Còn món tiếp theo
-          r->current_item_idx++; 
-          r->current_price = r->queue[r->current_item_idx].start_price;
-          r->highest_bidder_id = -1;
-          r->end_time = now + 60; // Tự động bắt đầu món tiếp theo với 60 giây (có thể điều chỉnh)
-          r->sent_warning = 0;   
-
-          // Thông báo vật phẩm mới
-          cJSON *next_item = cJSON_CreateObject();
-          cJSON_AddNumberToObject(next_item, "type", S2C_NEW_ITEM_PENDING);
-          cJSON_AddNumberToObject(next_item, "room_id", r->room_id);
-          cJSON_AddStringToObject(next_item, "title", r->queue[r->current_item_idx].title);
-          cJSON_AddNumberToObject(next_item, "start_price", r->current_price);
-          
-          char *s_next = cJSON_PrintUnformatted(next_item);
-          broadcast_to_room(r->room_id, s_next);
-          free(s_next);
-          cJSON_Delete(next_item);
-        } else {
-          // Hết món -> Đóng phòng
-          r->is_active = 0;
-          r->room_id = 0; // Giải phóng slot phòng
-          memset(r->owner_username, 0, 50);
-          printf("[Timer] Room ended and cleaned up.\n");
-        }
-      }
-    }
-  }
-}
-
 
 int main() {
   int listen_fd, new_fd;
@@ -144,7 +19,7 @@ int main() {
   memset(users, 0, sizeof(users));
   memset(rooms, 0, sizeof(rooms));
 
-  // --- ĐÃ THÊM: KHỞI TẠO DATABASE KHI START SERVER ---
+  // Khoi tao Database
   if (db_init("auction.db") != SQLITE_OK) {
       fprintf(stderr, "[Critical] Failed to initialize Database\n");
       exit(EXIT_FAILURE);
@@ -193,7 +68,7 @@ int main() {
     read_fds = master_set;
 
     struct timeval tv;
-    tv.tv_sec = 1; // Chờ tối đa 1 giây
+    tv.tv_sec = 1; // Cho toi da 1s
     tv.tv_usec = 0;
     int activity = select(fd_max + 1, &read_fds, NULL, NULL, &tv);
     if (activity == -1) {
@@ -201,11 +76,10 @@ int main() {
       break;
     }
 
-    check_auctions();
+    // Goi logic kiem tra thoi gian dau gia tu module auction_engine
+    check_auctions(); 
 
     if (activity == 0) {
-      // Timeout 1s mà không có tin nhắn nào -> Loop tiếp để check_auctions chạy
-      // liên tục
       continue;
     }
 
@@ -227,7 +101,8 @@ int main() {
             if (new_fd > fd_max)
               fd_max = new_fd;
 
-            init_user(new_fd);
+            // Khoi tao trang thai nguoi dung tu module user_manager
+            init_user(new_fd); 
           }
         } else {
           // Tu client
@@ -241,68 +116,23 @@ int main() {
             char *response = NULL;
 
             if (json) {
-              int type = 0;
-              get_json_int(json, "type", &type);
-
-              switch (type) {
-              case C2S_REGISTER:
-                response = handle_register(i, json);
-                break;
-              case C2S_LOGIN:
-                response = handle_login(i, json);
-                break;
-              case C2S_BID:
-                response = handle_bid(i, json);
-                break;
-              case C2S_BUY_NOW:
-                response = handle_buy_now(i, json);
-                break;
-              case C2S_CREATE_ROOM:
-                response = handle_create_room(i, json);
-                break;
-              case C2S_CREATE_ITEM:
-                response = handle_add_item(i, json);
-                break;
-              case C2S_LIST_ROOMS:
-                response = handle_list_rooms(i);
-                break;
-              case C2S_JOIN_ROOM:
-                response = handle_join_room(i, json);
-                break;
-              case C2S_SEARCH_ITEM:
-                response = handle_search_item(i, json);
-                break;
-              case C2S_GET_HISTORY:
-                response = handle_get_history(i);
-                break;
-              case C2S_DELETE_ITEM:
-                response = handle_delete_item(i, json);
-                break;  
-              case C2S_LEAVE_ROOM:
-                response = handle_leave_room(i);
-                break;
-              default:
-                response =
-                    create_error_response(ERR_UNKNOWN, "Unknown command type");
-                break;
-              }
+              // Su dung bo dieu phoi (Router) tu module handlers de xu ly tin nhan
+              response = handle_client_message(i, json);
               cJSON_Delete(json);
             } else {
               response = create_error_response(ERR_INVALID_MESSAGE,
                                                "Invalid JSON format");
             }
-
             if (response) {
               send_message(i, response);
               printf("[Sent fd %d]: %s\n", i, response);
               free(response);
             }
-
             free(payload);
-
           } else {
             printf("[Disconnect] Client fd %d disconnected\n", i);
-            clear_user(i);
+            // Don dep trang thai nguoi dung tu module user_manager
+            clear_user(i); 
             close(i);
             FD_CLR(i, &master_set);
           }
@@ -310,7 +140,7 @@ int main() {
       }
     }
   }
-  // --- ĐÃ THÊM: ĐÓNG DB KHI DỪNG SERVER ---
+  // Dong database
   db_close();
   return 0;
 }

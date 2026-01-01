@@ -149,3 +149,25 @@
 [Thu Jan  1 13:16:44 2026] User: linh       | Action: Created a room with queue management
 [Thu Jan  1 13:16:50 2026] User: nam        | Action: Joined a room
 [Thu Jan  1 13:16:53 2026] User: nam        | Action: Used BUY NOW
+[Thu Jan  1 17:16:08 2026] User: nam        | Action: LOGGED IN
+[Thu Jan  1 17:16:21 2026] User: linh       | Action: LOGGED IN
+[Thu Jan  1 17:16:38 2026] User: ha         | Action: REGISTERED new account
+[Thu Jan  1 17:16:44 2026] User: ha         | Action: LOGGED IN
+[Thu Jan  1 17:16:57 2026] User: linh       | Action: Created a room
+[Thu Jan  1 17:17:01 2026] User: nam        | Action: Joined a room
+[Thu Jan  1 17:17:05 2026] User: ha         | Action: Joined a room
+[Thu Jan  1 17:17:12 2026] User: ha         | Action: Placed a bid
+[Thu Jan  1 17:17:21 2026] User: nam        | Action: Placed a bid
+[Thu Jan  1 17:17:31 2026] User: ha         | Action: Used Buy Now
+[Thu Jan  1 17:18:23 2026] User: linh       | Action: Created a room
+[Thu Jan  1 17:18:30 2026] User: nam        | Action: Joined a room
+[Thu Jan  1 17:18:33 2026] User: nam        | Action: Used Buy Now
+[Thu Jan  1 17:51:35 2026] User: nam        | Action: LOGGED IN
+[Thu Jan  1 17:51:45 2026] User: linh       | Action: LOGGED IN
+[Thu Jan  1 17:51:53 2026] User: ha         | Action: LOGGED IN
+[Thu Jan  1 17:52:04 2026] User: linh       | Action: Created a room
+[Thu Jan  1 17:52:12 2026] User: nam        | Action: Joined a room
+[Thu Jan  1 17:52:16 2026] User: nam        | Action: Placed a bid
+[Thu Jan  1 17:52:23 2026] User: ha         | Action: Joined a room
+[Thu Jan  1 17:52:26 2026] User: ha         | Action: Placed a bid
+[Thu Jan  1 17:52:31 2026] User: ha         | Action: Used Buy Now
