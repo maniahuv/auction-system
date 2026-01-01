@@ -1,6 +1,7 @@
 #include "server.h"
 #include "state.h"
 #include "handlers.h"
+#include "db_manager.h" // Đã thêm include để sử dụng Database
 
 UserState users[MAX_USERS];
 RoomState rooms[MAX_ROOMS];
@@ -80,21 +81,10 @@ void check_auctions() {
           }
         }
 
-        // === VỊ TRÍ SỬA: Lưu lịch sử kèm theo owner_username (Cho tất cả các món) ===
+        // === VỊ TRÍ SỬA: Lưu lịch sử vào DATABASE thay vì file txt ===
         if (r->highest_bidder_id != -1) {
-            FILE *hf = fopen("history.txt", "a");
-            if (hf) {
-                // Định dạng: winner_name:item_title:final_price:timestamp:owner_username
-                // Việc lưu owner_username giúp Admin và Auctioneer lọc được dữ liệu chính xác
-                fprintf(hf, "%s:%s:%d:%ld:%s\n", 
-                        winner_name, 
-                        r->queue[r->current_item_idx].title, 
-                        r->current_price, 
-                        (long)time(NULL),
-                        r->owner_username);
-                fclose(hf);
-                printf("[History] Saved: %s won %s (Seller: %s)\n", winner_name, r->queue[r->current_item_idx].title, r->owner_username);
-            }
+            db_save_auction_result(winner_name, r->queue[r->current_item_idx].title, r->current_price, r->owner_username);
+            printf("[History] Saved to DB: %s won %s (Seller: %s)\n", winner_name, r->queue[r->current_item_idx].title, r->owner_username);
         }
 
         // Thông báo kết thúc cho vật phẩm (Broadcast)
@@ -153,6 +143,12 @@ int main() {
 
   memset(users, 0, sizeof(users));
   memset(rooms, 0, sizeof(rooms));
+
+  // --- ĐÃ THÊM: KHỞI TẠO DATABASE KHI START SERVER ---
+  if (db_init("auction.db") != SQLITE_OK) {
+      fprintf(stderr, "[Critical] Failed to initialize Database\n");
+      exit(EXIT_FAILURE);
+  }
 
   // 1. Khoi tao socket
   listen_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -314,5 +310,7 @@ int main() {
       }
     }
   }
+  // --- ĐÃ THÊM: ĐÓNG DB KHI DỪNG SERVER ---
+  db_close();
   return 0;
 }

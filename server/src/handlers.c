@@ -1,18 +1,22 @@
 #include "server.h"
 #include "state.h"
+#include "db_manager.h" // Thư viện quản lý Database
 
 
 // Tính năng ghi log hoạt động của user
 void log_activity(const char *username, const char *action) {
+    // 1. Ghi vào file log truyền thống
     FILE *f = fopen("auction_server.log", "a");
-    if (f == NULL) return;
+    if (f != NULL) {
+        time_t now = time(NULL);
+        char *timestamp = ctime(&now);
+        timestamp[strlen(timestamp) - 1] = '\0'; // Xóa ký tự xuống dòng
+        fprintf(f, "[%s] User: %-10s | Action: %s\n", timestamp, username ? username : "UNKNOWN", action);
+        fclose(f);
+    }
 
-    time_t now = time(NULL);
-    char *timestamp = ctime(&now);
-    timestamp[strlen(timestamp) - 1] = '\0'; // Xóa ký tự xuống dòng
-
-    fprintf(f, "[%s] User: %-10s | Action: %s\n", timestamp, username ? username : "UNKNOWN", action);
-    fclose(f);
+    // 2. Ghi vào Database (Tính năng nâng cao)
+    db_log_activity(username, action);
 }
 
 UserState *get_user_by_fd(int fd) {
@@ -53,27 +57,13 @@ char *handle_register(int fd, cJSON *json) {
 
     if (!user || !pass) return create_error_response(ERR_INVALID_MESSAGE, "Missing user or pass");
 
-    // Kiểm tra xem user đã tồn tại chưa
-    FILE *f = fopen("accounts.txt", "r");
-    char line[100], existing_user[50], existing_pass[50];
-    int r;
-    if (f) {
-        while (fgets(line, sizeof(line), f)) {
-            if (sscanf(line, "%[^:]:%[^:]:%d", existing_user, existing_pass, &r) >= 2) {
-                if (strcmp(existing_user, user) == 0) {
-                    fclose(f);
-                    return create_error_response(ERR_USER_EXISTS, "Username already exists");
-                }
-            }
-        }
-        fclose(f);
+    // Thay thế logic kiểm tra file bằng gọi Database
+    int rc = db_register_user(user, pass, role);
+    
+    if (rc != 0) {
+        // Thông thường rc != 0 trong SQLite INSERT UNIQUE là do Username đã tồn tại
+        return create_error_response(ERR_USER_EXISTS, "Username already exists or Database error");
     }
-
-    // Ghi tài khoản mới vào file theo định dạng user:pass:role
-    f = fopen("accounts.txt", "a");
-    if (!f) return create_error_response(ERR_UNKNOWN, "Internal server error (file)");
-    fprintf(f, "%s:%s:%d\n", user, pass, role);
-    fclose(f);
 
     log_activity(user, "REGISTERED new account");
     return create_ok_response();
@@ -82,24 +72,10 @@ char *handle_register(int fd, cJSON *json) {
 char *handle_login(int fd, cJSON *json) {
     const char *user = get_json_string(json, "user");
     const char *pass = get_json_string(json, "pass");
-
-    FILE *f = fopen("accounts.txt", "r");
-    if (!f) return create_error_response(ERR_USER_NOT_FOUND, "No accounts found. Please register first.");
-
-    char line[100], u[50], p[50];
     int role_val = 1;
-    int found = 0;
-    while (fgets(line, sizeof(line), f)) {
-        // Đọc thêm role từ file accounts.txt
-        if (sscanf(line, "%[^:]:%[^:]:%d", u, p, &role_val) >= 2) {
-            if (strcmp(u, user) == 0 && strcmp(p, pass) == 0) {
-                found = 1; break;
-            }
-        }
-    }
-    fclose(f);
 
-    if (found) {
+    // Thay thế logic quét file accounts.txt bằng Database
+    if (db_login_user(user, pass, &role_val)) {
         UserState *u_ptr = get_user_by_fd(fd);
         if (u_ptr) {
             strcpy(u_ptr->username, user);
@@ -113,6 +89,7 @@ char *handle_login(int fd, cJSON *json) {
         cJSON_AddNumberToObject(resp, "role", role_val);
         return cJSON_PrintUnformatted(resp);
     }
+    
     return create_error_response(ERR_WRONG_PASSWORD, "Invalid username or password");
 }
 
@@ -344,7 +321,7 @@ char *handle_add_item(int fd, cJSON *json) {
         return create_error_response(ERR_UNKNOWN, "Login required");
 
     int room_id = 0;
-    get_json_int(json, "room_id", &room_id); // Lấy room_id từ client
+    get_json_int(json, "room_id", &room_id); // ĐÃ SỬA: từ role_val thành room_id
 
     if (room_id <= 0 || room_id > MAX_ROOMS || !rooms[room_id - 1].is_active)
         return create_error_response(ERR_ROOM_NOT_FOUND, "Room not found or inactive");
@@ -446,40 +423,8 @@ char *handle_get_history(int fd) {
     UserState *u = get_user_by_fd(fd);
     if (!u || !u->is_logged_in) return create_error_response(ERR_UNKNOWN, "Login required");
 
-    cJSON *resp = cJSON_CreateObject();
-    cJSON_AddNumberToObject(resp, "type", S2C_HISTORY_LIST);
-    cJSON *h_list = cJSON_CreateArray();
-
-    FILE *f = fopen("history.txt", "r");
-    if (f) {
-        char line[256], winner[50], item[100], owner[50];
-        int price; long ts;
-        while (fgets(line, sizeof(line), f)) {
-            // Đọc định dạng mới: winner:item:price:timestamp:owner
-            int res = sscanf(line, "%[^:]:%[^:]:%d:%ld:%s", winner, item, &price, &ts, owner);
-            if (res >= 4) {
-                int should_add = 0;
-                // Admin: Thấy tất cả giao dịch
-                if (u->role == ROLE_ADMIN) should_add = 1;
-                // Bidder: Thấy món mình thắng
-                else if (u->role == ROLE_BIDDER && strcmp(winner, u->username) == 0) should_add = 1;
-                // Auctioneer: Thấy món mình đã bán (cần res == 5 để đảm bảo có field owner)
-                else if (u->role == ROLE_AUCTIONEER && res == 5 && strcmp(owner, u->username) == 0) should_add = 1;
-
-                if (should_add) {
-                    cJSON *h_item = cJSON_CreateObject();
-                    cJSON_AddStringToObject(h_item, "item", item);
-                    cJSON_AddNumberToObject(h_item, "price", price);
-                    cJSON_AddNumberToObject(h_item, "time", ts);
-                    cJSON_AddStringToObject(h_item, "winner", winner); 
-                    cJSON_AddItemToArray(h_list, h_item);
-                }
-            }
-        }
-        fclose(f);
-    }
-    cJSON_AddItemToObject(resp, "history", h_list);
-    return cJSON_PrintUnformatted(resp);
+    // Thay thế logic quét file history.txt bằng truy vấn Database thông minh
+    return db_get_history_json(u->username, u->role);
 }
 
 char *handle_search_item(int fd, cJSON *json) {
