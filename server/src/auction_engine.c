@@ -99,17 +99,32 @@ char *handle_bid(int fd, cJSON *json) {
 }
 
 // Ham xu ly yeu cau mua ngay
+// server/src/auction_engine.c
+
 char *handle_buy_now(int fd, cJSON *json) {
     (void)json;
     UserState *u = get_user_by_fd(fd);
-    if (!u || u->current_room_id == -1) return create_error_response(ERR_UNKNOWN, "Not in room");
+    
+    // 1. Kiem tra trang thai dang nhap va trong phong
+    if (!u || u->current_room_id == -1) 
+        return create_error_response(ERR_UNKNOWN, "Not in room");
+
+    // 2. Kiem tra quyen han
+    if (u->role != ROLE_BIDDER) 
+        return create_error_response(ERR_UNKNOWN, "Only Bidders can use Buy Now");
+
     RoomState *r = &rooms[u->current_room_id - 1];
     int bn_price = r->queue[r->current_item_idx].buy_now_price;
-    if (bn_price <= 0) return create_error_response(ERR_UNKNOWN, "Buy Now disabled");
 
+    // 3. Kiem tra tinh hop le cua Buy Now
+    if (bn_price <= 0) 
+        return create_error_response(ERR_UNKNOWN, "Buy Now disabled for this item");
+
+    // Thuc hien mua ngay
     r->current_price = bn_price;
     r->highest_bidder_id = fd;
-    r->end_time = time(NULL); // Ket thuc ngay lap tuc
-    log_activity(u->username, "Used Buy Now");
+    r->end_time = time(NULL); // Ket thuc phien ngay lap tuc
+    
+    log_activity(u->username, "Used Buy Now option");
     return create_ok_response();
 }

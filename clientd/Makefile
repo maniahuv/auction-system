@@ -1,47 +1,68 @@
-# File: clientd/Makefile
-CC = gcc
-CFLAGS = -Wall -Wextra -g -I../common/include -I../server/include -I../third_party/cJSON
-LDFLAGS = -L../lib -lcommon
+# =========================
+# Compiler & Target
+# =========================
+CC      := gcc
+BIN_DIR := ../bin
+TARGET_DAEMON := $(BIN_DIR)/clientd
+TARGET_CLI    := $(BIN_DIR)/auction_cli
 
-OBJ_DIR = ../build/obj/clientd
-BIN_DIR = ../bin
+# =========================
+# Directories
+# =========================
+OBJ_DIR             := ../build/obj/clientd
+COMMON_INCLUDE_DIR  := ../common/include
+SERVER_INCLUDE_DIR  := ../server/include
+CJSON_INCLUDE_DIR   := ../third_party/cJSON
+CLIENT_INCLUDE_DIR  := ./include
+LIB_DIR             := ../lib
 
-# --- TARGET 1: Client Daemon (Cho GUI/NodeJS) ---
-TARGET_DAEMON = $(BIN_DIR)/clientd
-SRC_DAEMON = src/main.c
-OBJ_DAEMON = $(OBJ_DIR)/main.o
+# =========================
+# Flags
+# =========================
+# Bổ sung -I$(CLIENT_INCLUDE_DIR) để tìm thấy các file .h mới
+CFLAGS  := -Wall -Wextra -g -I$(CLIENT_INCLUDE_DIR) -I$(COMMON_INCLUDE_DIR) -I$(SERVER_INCLUDE_DIR) -I$(CJSON_INCLUDE_DIR)
+LDFLAGS := -L$(LIB_DIR) -lcommon
 
-# --- TARGET 2: Client CLI (Cho Test Terminal) ---
-TARGET_CLI = $(BIN_DIR)/auction_cli
-SRC_CLI = src/cli.c
-OBJ_CLI = $(OBJ_DIR)/cli.o
+# =========================
+# Sources & Objects
+# =========================
+# Các thành phần logic dùng chung cho Client (Refactored)
+SHARED_OBJS := $(OBJ_DIR)/client_state.o \
+               $(OBJ_DIR)/client_utils.o \
+               $(OBJ_DIR)/cmd_parser.o \
+               $(OBJ_DIR)/ui_render.o
 
-# Build tất cả
+# Đối tượng cho bản Daemon (Cho UI/Python)
+OBJ_DAEMON := $(OBJ_DIR)/main.o
+
+# Đối tượng cho bản CLI (Terminal)
+OBJ_CLI    := $(OBJ_DIR)/cli.o
+
+# =========================
+# Rules
+# =========================
 all: $(TARGET_DAEMON) $(TARGET_CLI)
 
-# Quy tắc build Client Daemon
+# Quy tắc build Client Daemon (Chỉ cần logic pass-through JSON)
 $(TARGET_DAEMON): $(OBJ_DAEMON)
 	@mkdir -p $(BIN_DIR)
-	@echo "Linking $@"
+	@echo "LD  $@"
 	@$(CC) $(OBJ_DAEMON) -o $@ $(LDFLAGS)
 
-$(OBJ_DAEMON): $(SRC_DAEMON)
-	@mkdir -p $(OBJ_DIR)
-	@echo "Compiling $<"
-	@$(CC) $(CFLAGS) -c $< -o $@
-
-# Quy tắc build Client CLI
-$(TARGET_CLI): $(OBJ_CLI)
+# Quy tắc build Client CLI (Cần đầy đủ các module Parser và Renderer)
+$(TARGET_CLI): $(OBJ_CLI) $(SHARED_OBJS)
 	@mkdir -p $(BIN_DIR)
-	@echo "Linking $@"
-	@$(CC) $(OBJ_CLI) -o $@ $(LDFLAGS)
+	@echo "LD  $@"
+	@$(CC) $(OBJ_CLI) $(SHARED_OBJS) -o $@ $(LDFLAGS)
 
-$(OBJ_CLI): $(SRC_CLI)
+# Quy tắc biên dịch chung cho tất cả các file .c trong src/
+$(OBJ_DIR)/%.o: src/%.c
 	@mkdir -p $(OBJ_DIR)
-	@echo "Compiling $<"
+	@echo "CC  $<"
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(OBJ_DIR) $(TARGET_DAEMON) $(TARGET_CLI)
+	@echo "CLEAN clientd"
+	@rm -rf $(OBJ_DIR) $(TARGET_DAEMON) $(TARGET_CLI)
 
 .PHONY: all clean
