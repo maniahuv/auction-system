@@ -4,20 +4,20 @@
 #include "../../third_party/sqlite/sqlite3.h"
 #include "protocol.h"
 
-// Khởi tạo database và tạo các bảng nếu chưa có
+// Khoi tao database va tao cac bang neu chua co
 int db_init(const char *db_name);
 
-// Quản lý người dùng
+// Quan ly nguoi dung
 int db_register_user(const char *user, const char *pass, int role);
 int db_login_user(const char *user, const char *pass, int *role);
 
-// Quản lý lịch sử (trả về chuỗi JSON để handler gửi đi)
+// Quan ly lich suw (tra ve chuoi JSON de handler gui di)
 char* db_get_history_json(const char *username, int role);
 
-// Ghi lịch sử đấu giá
+// Ghi lich su dau gia
 int db_save_auction_result(const char *winner, const char *item, int price, const char *owner);
 
-// Ghi log hoạt động
+// Ghi log hoat dong
 void db_log_activity(const char *username, const char *action);
 
 void db_close();

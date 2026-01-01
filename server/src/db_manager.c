@@ -2,23 +2,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "../include/db_manager.h"
+#include "db_manager.h"
 #include "cJSON.h"
 
 sqlite3 *db;
 
+// Khoi tao cac bang trong database
 int db_init(const char *db_name) {
     int rc = sqlite3_open(db_name, &db);
     if (rc) return rc;
 
-    // 1. Tạo bảng Users
+    // 1. Tao bang USERS
     const char *sql_users = "CREATE TABLE IF NOT EXISTS users ("
                             "id INTEGER PRIMARY KEY AUTOINCREMENT,"
                             "username TEXT UNIQUE,"
                             "password TEXT,"
                             "role INTEGER);";
     
-    // 2. Tạo bảng History (Lưu kết quả đấu giá)
+    // 2. Tao bang HISTORY
     const char *sql_history = "CREATE TABLE IF NOT EXISTS history ("
                               "id INTEGER PRIMARY KEY AUTOINCREMENT,"
                               "winner TEXT,"
@@ -27,7 +28,7 @@ int db_init(const char *db_name) {
                               "timestamp INTEGER,"
                               "owner TEXT);";
 
-    // 3. Tạo bảng Activity Logs (Lưu nhật ký hoạt động)
+    // 3. Tao bang ACTIVITY_LOGS
     const char *sql_logs = "CREATE TABLE IF NOT EXISTS activity_logs ("
                            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
                            "username TEXT,"
@@ -41,6 +42,7 @@ int db_init(const char *db_name) {
     return SQLITE_OK;
 }
 
+// Luu tai khoan nguoi dung moi
 int db_register_user(const char *user, const char *pass, int role) {
     sqlite3_stmt *stmt;
     const char *sql = "INSERT INTO users (username, password, role) VALUES (?, ?, ?);";
@@ -57,6 +59,7 @@ int db_register_user(const char *user, const char *pass, int role) {
     return (rc == SQLITE_DONE) ? 0 : -1;
 }
 
+// Kiem tra tai khoan dang nhap nguoi dung
 int db_login_user(const char *user, const char *pass, int *role) {
     sqlite3_stmt *res;
     const char *sql = "SELECT role FROM users WHERE username = ? AND password = ?;";
@@ -76,6 +79,7 @@ int db_login_user(const char *user, const char *pass, int *role) {
     return 0; 
 }
 
+// Luu ket qua dau gia vao bang HISTORY
 int db_save_auction_result(const char *winner, const char *item, int price, const char *owner) {
     sqlite3_stmt *stmt;
     const char *sql = "INSERT INTO history (winner, item, price, timestamp, owner) VALUES (?, ?, ?, ?, ?);";
@@ -93,7 +97,7 @@ int db_save_auction_result(const char *winner, const char *item, int price, cons
     return (rc == SQLITE_DONE) ? 0 : -1;
 }
 
-// ĐÂY LÀ HÀM BỊ THIẾU KHIẾN BẠN GẶP LỖI
+// Luu nhat ky hoat dong cua nguoi dung
 void db_log_activity(const char *username, const char *action) {
     sqlite3_stmt *stmt;
     const char *sql = "INSERT INTO activity_logs (username, action, timestamp) VALUES (?, ?, ?);";
@@ -107,11 +111,12 @@ void db_log_activity(const char *username, const char *action) {
     sqlite3_finalize(stmt);
 }
 
+// Lay lich su dau gia
 char* db_get_history_json(const char *username, int role) {
     sqlite3_stmt *res;
     const char *sql;
 
-    // Phân quyền truy vấn dựa trên Role
+    // Phan quyen truy van dua tren role
     if (role == ROLE_ADMIN) {
         sql = "SELECT winner, item, price, timestamp FROM history ORDER BY timestamp DESC;";
     } else if (role == ROLE_AUCTIONEER) {
@@ -122,7 +127,7 @@ char* db_get_history_json(const char *username, int role) {
 
     if (sqlite3_prepare_v2(db, sql, -1, &res, 0) != SQLITE_OK) return NULL;
     
-    // Bind username cho các role không phải Admin
+    // bind username neu khong phai admin
     if (role != ROLE_ADMIN) {
         sqlite3_bind_text(res, 1, username, -1, SQLITE_STATIC);
     }
@@ -147,6 +152,7 @@ char* db_get_history_json(const char *username, int role) {
     return out;
 }
 
+// Dong ket noi database
 void db_close() {
     if (db) sqlite3_close(db);
 }

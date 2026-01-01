@@ -1,0 +1,8 @@
+nam:123:1
+linh:123:2
+ha:123:3
+auctioner1:123:2
+bidder1:123:1
+bidder2:123:1
+bidder3:123:1
+bidder4:123:1
