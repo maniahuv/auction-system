@@ -54,8 +54,21 @@ void check_auctions() {
                     r->current_item_idx++;
                     r->current_price = r->queue[r->current_item_idx].start_price;
                     r->highest_bidder_id = -1;
-                    r->end_time = now + 60;
+                    r->end_time = now + 60; // Reset 60 giay cho vat pham tiep theo
                     r->sent_warning = 0;
+
+                    // PHÁT TIN 902 ĐỂ CLIENT MỞ LẠI NÚT BẤM VÀ CẬP NHẬT THÔNG TIN MÓN MỚI
+                    cJSON *next = cJSON_CreateObject();
+                    cJSON_AddNumberToObject(next, "type", S2C_NEW_ITEM_PENDING);
+                    cJSON_AddStringToObject(next, "title", r->queue[r->current_item_idx].title);
+                    cJSON_AddNumberToObject(next, "start_price", r->current_price);
+                    char *s_next = cJSON_PrintUnformatted(next);
+                    broadcast_to_room(r->room_id, s_next);
+                    free(s_next); cJSON_Delete(next);
+
+                    // Cập nhật lại hàng chờ cho cả phòng để món vừa đấu biến mất khỏi danh sách chờ trên UI
+                    extern void broadcast_queue_update(int room_id);
+                    broadcast_queue_update(r->room_id);
                 } else {
                     r->is_active = 0; r->room_id = 0;
                 }
@@ -79,7 +92,7 @@ char *handle_bid(int fd, cJSON *json) {
     r->current_price = price;
     r->highest_bidder_id = fd;
 
-    // Reset timer neu con < 30s
+    // Reset timer neu con < 30s (Gia han them thoi gian dau gia)
     time_t now = time(NULL);
     if (difftime(r->end_time, now) < 30.0) {
         r->end_time = now + 30;
@@ -91,16 +104,20 @@ char *handle_bid(int fd, cJSON *json) {
     cJSON_AddNumberToObject(bc, "type", S2C_NEW_BID);
     cJSON_AddStringToObject(bc, "bidder", u->username);
     cJSON_AddNumberToObject(bc, "current_price", price);
-    char *s = cJSON_PrintUnformatted(bc);
-    broadcast_to_room(r->room_id, s);
-    free(s); cJSON_Delete(bc);
+    char *s_bc = cJSON_PrintUnformatted(bc);
+    broadcast_to_room(r->room_id, s_bc);
+    free(s_bc); cJSON_Delete(bc);
 
-    return create_ok_response();
+    // PHẢN HỒI RIÊNG cho người đặt giá: Gửi thông báo cụ thể để tránh GUI tự động quay về Dashboard
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "type", S2C_GENERIC_OK);
+    cJSON_AddStringToObject(resp, "message", "BID_SUCCESS");
+    char *s_resp = cJSON_PrintUnformatted(resp);
+    cJSON_Delete(resp);
+    return s_resp;
 }
 
 // Ham xu ly yeu cau mua ngay
-// server/src/auction_engine.c
-
 char *handle_buy_now(int fd, cJSON *json) {
     (void)json;
     UserState *u = get_user_by_fd(fd);
@@ -123,7 +140,7 @@ char *handle_buy_now(int fd, cJSON *json) {
     // Thuc hien mua ngay
     r->current_price = bn_price;
     r->highest_bidder_id = fd;
-    r->end_time = time(NULL); // Ket thuc phien ngay lap tuc
+    r->end_time = time(NULL); // Ket thuc phien ngay lap tuc, check_auctions se xu ly tiep theo
     
     log_activity(u->username, "Used Buy Now option");
     return create_ok_response();
