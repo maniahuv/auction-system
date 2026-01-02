@@ -2,20 +2,46 @@
 #include "user_manager.h"
 #include "logger.h"
 #include "db_manager.h"
+#include "framing.h"
 #include "json_util.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+// Truy cập mảng người dùng toàn cục
+extern UserState users[];
+
+// Helper để gửi cập nhật hàng chờ cho cả phòng khi có thay đổi (Thêm/Xóa vật phẩm)
+void broadcast_queue_update(int room_id) {
+    RoomState *r = &rooms[room_id - 1];
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "type", 907); // S2C_QUEUE_UPDATE
+    cJSON *q_arr = cJSON_CreateArray();
+    
+    // Gửi danh sách các vật phẩm từ vị trí hiện tại trở đi
+    for (int j = r->current_item_idx; j < r->total_items; j++) {
+        cJSON *obj = cJSON_CreateObject();
+        cJSON_AddStringToObject(obj, "title", r->queue[j].title);
+        cJSON_AddNumberToObject(obj, "start_price", r->queue[j].start_price);
+        cJSON_AddItemToArray(q_arr, obj);
+    }
+    
+    cJSON_AddItemToObject(resp, "queue", q_arr);
+    char *s = cJSON_PrintUnformatted(resp);
+    broadcast_to_room(room_id, s);
+    free(s); 
+    cJSON_Delete(resp);
+}
+
 // Xu ly cac logic lien quan phong dau gia
 char *handle_create_room(int fd, cJSON *json) {
     UserState *u = get_user_by_fd(fd);
-    if (!u || !u->is_logged_in) return create_error_response(ERR_UNKNOWN, "Login required");
-    if (u->role != ROLE_AUCTIONEER) return create_error_response(ERR_UNKNOWN, "Only Auctioneers can create rooms");
+    if (!u || !u->is_logged_in) return create_error_response(ERR_UNKNOWN, "Yeu cau dang nhap!");
+    if (u->role != ROLE_AUCTIONEER) return create_error_response(ERR_UNKNOWN, "Chi nguoi dau gia moi co the tao phong!");
 
     for (int j = 0; j < MAX_ROOMS; j++) {
         if (rooms[j].is_active && strcmp(rooms[j].owner_username, u->username) == 0) {
-            return create_error_response(ERR_UNKNOWN, "You already have an active room");
+            return create_error_response(ERR_UNKNOWN, "Ban da co mot phong dang hoat dong!");
         }
     }
 
@@ -24,7 +50,7 @@ char *handle_create_room(int fd, cJSON *json) {
     get_json_int(json, "start_price", &start_price);
     get_json_int(json, "buy_now", &buy_now);
 
-    if (!title || start_price <= 0) return create_error_response(ERR_INVALID_MESSAGE, "Invalid title or price");
+    if (!title || start_price <= 0) return create_error_response(ERR_INVALID_MESSAGE, "Thong tin vat pham khong hop le!");
 
     for (int i = 0; i < MAX_ROOMS; i++) {
         if (rooms[i].room_id == 0) {
@@ -42,45 +68,77 @@ char *handle_create_room(int fd, cJSON *json) {
             rooms[i].sent_warning = 0;
             u->current_room_id = rooms[i].room_id;
 
-            log_activity(u->username, "Created a room");
+            log_activity(u->username, "Da tao phong dau gia moi");
             cJSON *resp = cJSON_CreateObject();
             cJSON_AddNumberToObject(resp, "type", S2C_GENERIC_OK);
-            cJSON_AddStringToObject(resp, "message", "Room created successfully");
+            cJSON_AddStringToObject(resp, "message", "Tao phong thanh cong!");
             cJSON_AddNumberToObject(resp, "room_id", rooms[i].room_id);
             char *s = cJSON_PrintUnformatted(resp);
             cJSON_Delete(resp);
             return s;
         }
     }
-    return create_error_response(ERR_UNKNOWN, "Server full");
+    return create_error_response(ERR_UNKNOWN, "May chu da day phong!");
 }
 
 // Xu ly nguoi dung tham gia phong dau gia
 char *handle_join_room(int fd, cJSON *json) {
     UserState *u = get_user_by_fd(fd);
-    if (!u || !u->is_logged_in) return create_error_response(ERR_UNKNOWN, "Login required");
+    if (!u || !u->is_logged_in) {
+        return create_error_response(ERR_UNKNOWN, "Yeu cau dang nhap!");
+    }
 
     int room_id = 0;
     get_json_int(json, "room_id", &room_id);
-    if (room_id <= 0 || room_id > MAX_ROOMS || !rooms[room_id - 1].is_active)
-        return create_error_response(ERR_ROOM_NOT_FOUND, "Room not found");
+    
+    if (room_id <= 0 || room_id > MAX_ROOMS || !rooms[room_id - 1].is_active) {
+        return create_error_response(ERR_ROOM_NOT_FOUND, "Khong tim thay phong dau gia!");
+    }
 
     u->current_room_id = room_id;
-    log_activity(u->username, "Joined a room");
+    RoomState *r = &rooms[room_id - 1];
+    log_activity(u->username, "Tham gia vao phong");
 
+    // 1. Thong bao cho NHUNG NGUOI KHAC trong phong
     cJSON *notif = cJSON_CreateObject();
     cJSON_AddNumberToObject(notif, "type", S2C_GENERIC_OK);
     char msg[100];
-    snprintf(msg, sizeof(msg), "User %s joined the room", u->username);
+    snprintf(msg, sizeof(msg), "Nguoi dung %s da tham gia phong", u->username);
     cJSON_AddStringToObject(notif, "message", msg);
     char *s_notif = cJSON_PrintUnformatted(notif);
-    broadcast_to_room(room_id, s_notif);
+    
+    for (int i = 0; i < MAX_USERS; i++) {
+        if (users[i].fd != -1 && users[i].fd != fd && users[i].current_room_id == room_id) {
+            send_message(users[i].fd, s_notif);
+        }
+    }
     free(s_notif);
     cJSON_Delete(notif);
 
+    // 2. Phan hoi cho nguoi join kem thong tin vat pham va hang cho
     cJSON *resp = cJSON_CreateObject();
     cJSON_AddNumberToObject(resp, "type", S2C_JOIN_ROOM_SUCCESS);
     cJSON_AddNumberToObject(resp, "room_id", room_id);
+    
+    if (r->current_item_idx < r->total_items) {
+        cJSON_AddStringToObject(resp, "item_title", r->queue[r->current_item_idx].title);
+        cJSON_AddNumberToObject(resp, "current_price", r->current_price);
+        cJSON_AddNumberToObject(resp, "buy_now", r->queue[r->current_item_idx].buy_now_price);
+        
+        time_t now = time(NULL);
+        int time_left = (int)difftime(r->end_time, now);
+        cJSON_AddNumberToObject(resp, "time_left", time_left > 0 ? time_left : 0);
+
+        cJSON *q_arr = cJSON_CreateArray();
+        for (int j = r->current_item_idx; j < r->total_items; j++) {
+            cJSON *obj = cJSON_CreateObject();
+            cJSON_AddStringToObject(obj, "title", r->queue[j].title);
+            cJSON_AddNumberToObject(obj, "start_price", r->queue[j].start_price);
+            cJSON_AddItemToArray(q_arr, obj);
+        }
+        cJSON_AddItemToObject(resp, "queue", q_arr);
+    }
+
     char *s = cJSON_PrintUnformatted(resp);
     cJSON_Delete(resp);
     return s;
@@ -90,23 +148,28 @@ char *handle_join_room(int fd, cJSON *json) {
 char *handle_leave_room(int fd) {
     UserState *u = get_user_by_fd(fd);
     if (!u || !u->is_logged_in || u->current_room_id == -1)
-        return create_error_response(ERR_UNKNOWN, "Not in any room");
+        return create_error_response(ERR_UNKNOWN, "Ban dang khong o trong phong nao!");
 
     int old_room = u->current_room_id;
     u->current_room_id = -1;
-    log_activity(u->username, "Left the room");
+    log_activity(u->username, "Da roi khoi phong");
 
     cJSON *notif = cJSON_CreateObject();
     cJSON_AddNumberToObject(notif, "type", S2C_GENERIC_OK);
     char msg[100];
-    snprintf(msg, sizeof(msg), "User %s left the room", u->username);
+    snprintf(msg, sizeof(msg), "Nguoi dung %s da roi phong", u->username);
     cJSON_AddStringToObject(notif, "message", msg);
     char *s_notif = cJSON_PrintUnformatted(notif);
     broadcast_to_room(old_room, s_notif);
     free(s_notif);
     cJSON_Delete(notif);
 
-    return create_ok_response();
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "type", S2C_GENERIC_OK);
+    cJSON_AddStringToObject(resp, "message", "LEAVE_SUCCESS");
+    char *s = cJSON_PrintUnformatted(resp);
+    cJSON_Delete(resp);
+    return s;
 }
 
 // Xu ly danh sach phong dau gia
@@ -135,7 +198,7 @@ char *handle_list_rooms(int fd) {
         }
     }
     cJSON_AddItemToObject(resp, "rooms", arr);
-    char *s = cJSON_PrintUnformatted(resp);
+    char *s = cJSON_PrintUnformatted(resp); 
     cJSON_Delete(resp);
     return s;
 }
@@ -146,13 +209,13 @@ char *handle_add_item(int fd, cJSON *json) {
     int room_id = 0;
     get_json_int(json, "room_id", &room_id);
     if (room_id <= 0 || room_id > MAX_ROOMS || !rooms[room_id - 1].is_active)
-        return create_error_response(ERR_ROOM_NOT_FOUND, "Room inactive");
+        return create_error_response(ERR_ROOM_NOT_FOUND, "Phong khong ton tai!");
 
     RoomState *r = &rooms[room_id - 1];
     if (u->role != ROLE_ADMIN && strcmp(r->owner_username, u->username) != 0)
-        return create_error_response(ERR_UNKNOWN, "Not owner");
+        return create_error_response(ERR_UNKNOWN, "Ban khong phai chu phong!");
 
-    if (r->total_items >= MAX_ITEMS_PER_ROOM) return create_error_response(ERR_UNKNOWN, "Queue full");
+    if (r->total_items >= MAX_ITEMS_PER_ROOM) return create_error_response(ERR_UNKNOWN, "Hang cho da day!");
 
     const char *title = get_json_string(json, "title");
     int sp = 0, bn = 0;
@@ -164,7 +227,9 @@ char *handle_add_item(int fd, cJSON *json) {
     r->queue[r->total_items].buy_now_price = bn;
     r->total_items++;
 
-    log_activity(u->username, "Added item to queue");
+    log_activity(u->username, "Da them vat pham moi vao hang cho");
+    broadcast_queue_update(r->room_id);
+    
     return create_ok_response();
 }
 
@@ -176,19 +241,21 @@ char *handle_delete_item(int fd, cJSON *json) {
     get_json_int(json, "item_index", &idx);
     RoomState *r = &rooms[rid - 1];
     if (u->role != ROLE_ADMIN && strcmp(r->owner_username, u->username) != 0)
-        return create_error_response(ERR_UNKNOWN, "Unauthorized");
+        return create_error_response(ERR_UNKNOWN, "Khong co quyen truy cap!");
 
     int real_idx = idx - 1;
     if (real_idx <= r->current_item_idx || real_idx >= r->total_items)
-        return create_error_response(ERR_UNKNOWN, "Invalid item index");
+        return create_error_response(ERR_UNKNOWN, "Vat pham khong hop le hoac dang duoc dau gia!");
 
     for (int i = real_idx; i < r->total_items - 1; i++) r->queue[i] = r->queue[i+1];
     r->total_items--;
-    log_activity(u->username, "Deleted item from queue");
+    log_activity(u->username, "Da xoa vat pham khoi hang cho");
+    broadcast_queue_update(r->room_id);
+    
     return create_ok_response();
 }
 
-// Xu ly tim kiem vat pham trong cac phong dau gia
+// Xu ly tim kiem vat pham
 char *handle_search_item(int fd, cJSON *json) {
     (void)fd;
     const char *kw = get_json_string(json, "keyword");
@@ -215,9 +282,9 @@ char *handle_search_item(int fd, cJSON *json) {
     return s;
 }
 
-// Xu ly lich su dau gia cua nguoi dung
+// Xu ly lich su dau gia
 char *handle_get_history(int fd) {
     UserState *u = get_user_by_fd(fd);
-    if (!u || !u->is_logged_in) return create_error_response(ERR_UNKNOWN, "Login required");
+    if (!u || !u->is_logged_in) return create_error_response(ERR_UNKNOWN, "Yeu cau dang nhap!");
     return db_get_history_json(u->username, u->role);
 }

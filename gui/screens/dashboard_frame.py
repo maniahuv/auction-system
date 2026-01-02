@@ -17,10 +17,20 @@ class DashboardFrame(tk.Frame):
         tk.Button(toolbar, text="🔄 Làm mới", font=("Arial", 10),
                   command=self.refresh_rooms).pack(side="left", padx=5)
         
+        # --- BỔ SUNG: Thanh tìm kiếm vật phẩm ---
+        tk.Label(toolbar, text="🔍 Tìm vật phẩm:", font=("Arial", 10)).pack(side="left", padx=(15, 2))
+        self.ent_search = tk.Entry(toolbar, width=20, font=("Arial", 10))
+        self.ent_search.pack(side="left", padx=2)
+        # Cho phép nhấn Enter để tìm kiếm nhanh
+        self.ent_search.bind("<Return>", lambda e: self.search_item())
+        
+        tk.Button(toolbar, text="Tìm", font=("Arial", 10, "bold"), 
+                  bg="#f0f0f0", command=self.search_item).pack(side="left", padx=2)
+        
         # Chỉ hiển thị nút "Tạo phòng" nếu người dùng là AUCTIONEER (Role 2)
         if self.controller.user_role == 2:
             tk.Button(toolbar, text="➕ Tạo phòng mới", font=("Arial", 10),
-                      bg="#E3F2FD", command=self.open_create_room).pack(side="left", padx=5)
+                      bg="#E3F2FD", command=self.open_create_room).pack(side="left", padx=15)
         
         tk.Button(toolbar, text="📜 Xem lịch sử", font=("Arial", 10),
                   command=self.view_history).pack(side="right", padx=5)
@@ -63,6 +73,17 @@ class DashboardFrame(tk.Frame):
     def refresh_rooms(self):
         """Gửi yêu cầu lấy danh sách phòng mới (C2S_LIST_ROOMS = 201)"""
         self.controller.backend.send_command({"type": 201})
+
+    def search_item(self):
+        """Gửi yêu cầu tìm kiếm vật phẩm (C2S_SEARCH_ITEM = 205)"""
+        keyword = self.ent_search.get().strip()
+        if not keyword:
+            messagebox.showwarning("Chú ý", "Vui lòng nhập từ khóa tìm kiếm!")
+            return
+        self.controller.backend.send_command({
+            "type": 205,
+            "keyword": keyword
+        })
 
     def update_room_list(self, rooms_data):
         """Cập nhật dữ liệu vào bảng khi Server gửi về (S2C_ROOM_LIST = 810)"""
