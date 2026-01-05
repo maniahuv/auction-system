@@ -68,6 +68,9 @@ char *handle_create_room(int fd, cJSON *json) {
             rooms[i].sent_warning = 0;
             u->current_room_id = rooms[i].room_id;
 
+            // ĐỒNG BỘ PHÒNG MỚI TẠO VÀO DATABASE
+            db_update_room_state(rooms[i].room_id, rooms[i].current_item_idx, rooms[i].current_price, rooms[i].highest_bidder_id, (long)rooms[i].end_time);
+
             log_activity(u->username, "Da tao phong dau gia moi");
             cJSON *resp = cJSON_CreateObject();
             cJSON_AddNumberToObject(resp, "type", S2C_GENERIC_OK);
@@ -227,6 +230,9 @@ char *handle_add_item(int fd, cJSON *json) {
     r->queue[r->total_items].buy_now_price = bn;
     r->total_items++;
 
+    // ĐỒNG BỘ HÀNG CHỜ MỚI VÀO DATABASE
+    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+
     log_activity(u->username, "Da them vat pham moi vao hang cho");
     broadcast_queue_update(r->room_id);
     
@@ -249,6 +255,10 @@ char *handle_delete_item(int fd, cJSON *json) {
 
     for (int i = real_idx; i < r->total_items - 1; i++) r->queue[i] = r->queue[i+1];
     r->total_items--;
+
+    // ĐỒNG BỘ HÀNG CHỜ SAU KHI XÓA VÀO DATABASE
+    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+
     log_activity(u->username, "Da xoa vat pham khoi hang cho");
     broadcast_queue_update(r->room_id);
     

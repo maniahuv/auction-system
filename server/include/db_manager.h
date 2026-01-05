@@ -20,6 +20,15 @@ int db_save_auction_result(const char *winner, const char *item, int price, cons
 // Ghi log hoat dong
 void db_log_activity(const char *username, const char *action);
 
+// --- CChong mat du lieu khi server sap---
+
+// Cap nhat trang thai tuc thoi cua phong vao Database
+int db_update_room_state(int room_id, int current_item_idx, int current_price, int highest_bidder_id, long end_time);
+
+// Khoi phuc trang thai cac phong tu Database khi Server khoi dong lai
+int db_load_active_auctions(void *rooms_array);
+
+
 void db_close();
 
 #endif
