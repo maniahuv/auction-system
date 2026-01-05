@@ -54,3 +54,13 @@ void broadcast_to_room(int room_id, char *json_message) {
         }
     }
 }
+
+// Lấy con trỏ đến UserState dựa trên username (dùng để kiểm tra đăng nhập trùng)
+UserState *get_user_by_username(const char *username) {
+    for (int i = 0; i < MAX_USERS; i++) {
+        if (users[i].is_logged_in && strcmp(users[i].username, username) == 0) {
+            return &users[i];
+        }
+    }
+    return NULL;
+}
