@@ -59,8 +59,8 @@ typedef enum {
     S2C_NEW_BID = 904,         		// Thong bao gia moi duoc cap nhat
     S2C_TIME_ALERT = 905,      		// Canh bao con 30s
     S2C_AUCTION_ENDED = 906,   		// Thong bao ket thuc phien dau gia
-    S2C_CHAT = 908
-    
+    S2C_CHAT = 908,
+    S2C_ROOM_USER_COUNT = 909
 } ServerMessageType;
 
 typedef enum {
