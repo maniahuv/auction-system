@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import json
 import os
+from datetime import datetime
 
 # Import các thành phần giao diện và logic
 from backend_bridge import AuctionBackend
@@ -33,17 +34,14 @@ class AuctionApp:
     # --- TIỆN ÍCH ĐIỀU HƯỚNG (NAVIGATION UTILS) ---
 
     def show_frame(self, frame_name):
-        """
-        Phương thức tiện ích để chuyển đổi màn hình từ các Frame con.
-        Giúp fix lỗi AttributeError khi các Frame gọi controller.show_frame()
-        """
+        """Phương thức tiện ích để chuyển đổi màn hình từ các Frame con."""
         if frame_name == "LoginFrame":
             self.show_login_screen()
         elif frame_name == "DashboardFrame":
             self.show_dashboard()
 
     def show_toast(self, message, duration=2500, bg="#333333"):
-        """Hiển thị thông báo tự tắt sau một khoảng thời gian (Toast Notification)"""
+        """Hiển thị thông báo tự tắt sau một khoảng thời gian."""
         toast = tk.Toplevel(self.root)
         toast.overrideredirect(True)
         toast.attributes("-topmost", True)
@@ -73,7 +71,6 @@ class AuctionApp:
     # --- CHUYỂN ĐỔI MÀN HÌNH (SCREENS) ---
 
     def show_login_screen(self):
-        """Hiển thị màn hình đăng nhập."""
         self.clear_frame()
         self.current_frame = tk.Frame(self.container)
         self.current_frame.pack(expand=True)
@@ -111,8 +108,8 @@ class AuctionApp:
         self.ent_reg_pass.pack(pady=5)
 
         self.role_var = tk.IntVar(value=1)
-        tk.Radiobutton(self.current_frame, text="Người mua (Bidder)", variable=self.role_var, value=ROLE_BIDDER if 'ROLE_BIDDER' in globals() else 1).pack(anchor="w")
-        tk.Radiobutton(self.current_frame, text="Người bán (Auctioneer)", variable=self.role_var, value=ROLE_AUCTIONEER if 'ROLE_AUCTIONEER' in globals() else 2).pack(anchor="w")
+        tk.Radiobutton(self.current_frame, text="Người mua (Bidder)", variable=self.role_var, value=1).pack(anchor="w")
+        tk.Radiobutton(self.current_frame, text="Người bán (Auctioneer)", variable=self.role_var, value=2).pack(anchor="w")
 
         tk.Button(self.current_frame, text="ĐĂNG KÝ NGAY", bg="#4CAF50", fg="white",
                   font=("Arial", 11, "bold"), width=25, pady=8, command=self.register).pack(pady=25)
@@ -120,14 +117,12 @@ class AuctionApp:
         tk.Button(self.current_frame, text="Quay lại đăng nhập", relief="flat", fg="#666", command=self.show_login_screen).pack()
 
     def show_dashboard(self):
-        """Hiển thị giao diện chính sau khi đăng nhập."""
         self.clear_frame()
         self.dashboard_frame = DashboardFrame(self.container, self)
         self.dashboard_frame.pack(fill="both", expand=True)
         self.current_frame = self.dashboard_frame
 
     def show_auction_room(self, room_id):
-        """Chuyển sang màn hình phòng đấu giá."""
         self.clear_frame()
         self.room_frame = AuctionRoomFrame(self.container, self)
         self.room_frame.set_room_info(room_id)
@@ -151,10 +146,49 @@ class AuctionApp:
         tree.pack(fill="both", expand=True, padx=20, pady=10)
         tk.Button(search_win, text="Đóng", width=15, command=search_win.destroy).pack(pady=10)
 
+    # --- NÂNG CẤP: GIAO DIỆN LỊCH SỬ DẠNG BẢNG ---
+
+    def show_history_window(self, history):
+        """Hiển thị lịch sử đấu giá bao gồm cả tên người bán."""
+        history_win = tk.Toplevel(self.root)
+        history_win.title("Lịch sử phiên đấu giá")
+        history_win.geometry("850x500")
+        history_win.grab_set()
+        
+        tk.Label(history_win, text="LỊCH SỬ GIAO DỊCH", font=("Arial", 14, "bold"), pady=15).pack()
+
+        cols = ("time", "item", "owner", "winner", "price")
+        tree = ttk.Treeview(history_win, columns=cols, show="headings")
+        
+        tree.heading("time", text="Thời gian")
+        tree.heading("item", text="Vật phẩm")
+        tree.heading("owner", text="Người bán")
+        tree.heading("winner", text="Người thắng")
+        tree.heading("price", text="Giá trúng")
+
+        tree.column("time", width=150, anchor="center")
+        tree.column("item", width=200, anchor="w")
+        tree.column("owner", width=120, anchor="center")
+        tree.column("winner", width=120, anchor="center")
+        tree.column("price", width=120, anchor="e")
+
+        for h in history:
+            dt = datetime.fromtimestamp(h.get('time', 0)).strftime('%Y-%m-%d %H:%M')
+            tree.insert("", "end", values=(
+                dt,
+                h.get('item'),
+                h.get('owner', '---'), # Hiển thị tên người bán lấy từ database
+                h.get('winner'),
+                f"{h.get('price', 0):,} VND"
+            ))
+
+        tree.pack(fill="both", expand=True, padx=20, pady=10)
+        tk.Button(history_win, text="Đóng", width=15, command=history_win.destroy).pack(pady=10)
+
     # --- GIAO DIỆN QUẢN LÝ USER DÀNH CHO ADMIN ---
 
     def show_admin_user_management(self, users):
-        """Hiển thị cửa sổ quản lý người dùng (Dành cho Admin - Mã 820)."""
+        """Giao diện quản lý người dùng với chức năng Sửa quyền và Xóa."""
         admin_win = tk.Toplevel(self.root)
         admin_win.title("Quản lý người dùng (Admin)")
         admin_win.geometry("650x550")
@@ -181,93 +215,73 @@ class AuctionApp:
         btn_frame = tk.Frame(admin_win)
         btn_frame.pack(pady=10)
 
-        # Chức năng Sửa quyền
         def update_role():
             selected = tree.selection()
             if not selected:
                 messagebox.showwarning("Chú ý", "Vui lòng chọn người dùng!")
                 return
-            
             uid = tree.item(selected[0])['values'][0]
             role_win = tk.Toplevel(admin_win)
-            role_win.title("Chọn quyền mới")
-            role_win.geometry("250x200")
-            
+            role_win.title("Sửa quyền")
             tk.Label(role_win, text="Chọn quyền hạn mới:").pack(pady=10)
             new_role_var = tk.IntVar(value=1)
             tk.Radiobutton(role_win, text="Người mua (Bidder)", variable=new_role_var, value=1).pack()
             tk.Radiobutton(role_win, text="Người bán (Auctioneer)", variable=new_role_var, value=2).pack()
-            tk.Radiobutton(role_win, text="Quản trị viên (Admin)", variable=new_role_var, value=3).pack()
+            tk.Radiobutton(role_win, text="Admin", variable=new_role_var, value=3).pack()
             
-            def confirm_change():
-                self.backend.send_command({
-                    "type": 603, 
-                    "user_id": int(uid), 
-                    "new_role": new_role_var.get()
-                })
+            def confirm():
+                self.backend.send_command({"type": 603, "user_id": int(uid), "new_role": new_role_var.get()})
                 role_win.destroy()
                 admin_win.destroy()
                 self.root.after(500, lambda: self.backend.send_command({"type": 601}))
+            tk.Button(role_win, text="Xác nhận", command=confirm).pack(pady=10)
 
-            tk.Button(role_win, text="Xác nhận", bg="#4CAF50", fg="white", command=confirm_change).pack(pady=10)
-
-        # Chức năng Xóa
         def delete_user():
             selected = tree.selection()
             if not selected:
-                messagebox.showwarning("Chú ý", "Vui lòng chọn người dùng cần xóa!")
+                messagebox.showwarning("Chú ý", "Vui lòng chọn người dùng!")
                 return
             uid = tree.item(selected[0])['values'][0]
-            if messagebox.askyesno("Xác nhận", f"Bạn có chắc muốn xóa người dùng ID {uid}?"):
-                if hasattr(self.backend, 'admin_delete_user'):
-                    self.backend.admin_delete_user(uid)
-                else:
-                    self.backend.send_command({"type": 602, "user_id": int(uid)})
+            if messagebox.askyesno("Xác nhận", f"Xóa ID {uid}?"):
+                self.backend.send_command({"type": 602, "user_id": int(uid)})
                 admin_win.destroy()
                 self.root.after(500, lambda: self.backend.send_command({"type": 601}))
 
-        tk.Button(btn_frame, text="Sửa quyền", bg="#2196F3", fg="white", 
-                  font=("Arial", 10, "bold"), command=update_role, width=15).pack(side="left", padx=10)
-        
-        tk.Button(btn_frame, text="Xóa người dùng", bg="#f44336", fg="white", 
-                  font=("Arial", 10, "bold"), command=delete_user, width=15).pack(side="left", padx=10)
-        
-        tk.Button(btn_frame, text="Đóng", font=("Arial", 10), width=15, 
-                  command=admin_win.destroy).pack(side="left", padx=10)
+        tk.Button(btn_frame, text="Sửa quyền", bg="#2196F3", fg="white", command=update_role, width=15).pack(side="left", padx=10)
+        tk.Button(btn_frame, text="Xóa người dùng", bg="#f44336", fg="white", command=delete_user, width=15).pack(side="left", padx=10)
+        tk.Button(btn_frame, text="Đóng", command=admin_win.destroy, width=15).pack(side="left", padx=10)
 
     # --- LỆNH BACKEND ---
 
     def login(self):
         u, p = self.ent_user.get().strip(), self.ent_pass.get().strip()
-        if u and p: self.backend.login(u, p) if hasattr(self.backend, 'login') else self.backend.send_command({"type": 102, "user": u, "pass": p})
+        if u and p: self.backend.send_command({"type": 102, "user": u, "pass": p})
 
     def register(self):
         u, p, r = self.ent_reg_user.get().strip(), self.ent_reg_pass.get().strip(), self.role_var.get()
-        if u and p: self.backend.register(u, p, r) if hasattr(self.backend, 'register') else self.backend.send_command({"type": 101, "user": u, "pass": p, "role": r})
+        if u and p: self.backend.send_command({"type": 101, "user": u, "pass": p, "role": r})
 
     # --- XỬ LÝ PROTOCOL ---
 
     def handle_server_response(self, data):
-        """Bộ điều phối chính xử lý phản hồi từ Server."""
         msg_type = data.get("type")
         
-        if msg_type == 802: # S2C_LOGIN_SUCCESS
+        if msg_type == 802: # Login Success
             self.user_role = data.get("role")
             self.show_dashboard()
             self.show_toast(f"Chào mừng quay trở lại!", bg="#2196F3")
             self.root.after(200, lambda: self.backend.send_command({"type": 201}))
 
-        elif msg_type == 801: # S2C_GENERIC_ERROR
+        elif msg_type == 801: # Error
             messagebox.showerror("Lỗi", data.get("message") or "Thao tác thất bại")
 
-        elif msg_type == 800: # S2C_GENERIC_OK
+        elif msg_type == 800: # Generic OK
             msg_text = data.get("message", "")
             if msg_text == "BID_SUCCESS":
                 self.show_toast("✅ Bạn đang dẫn đầu mức giá!", bg="#4CAF50")
                 return 
             if msg_text == "LEAVE_SUCCESS":
                 self.show_dashboard()
-                self.show_toast("Đã rời phòng thành công", duration=1500)
                 self.root.after(100, lambda: self.backend.send_command({"type": 201}))
                 return
             if msg_text == "LOGOUT_SUCCESS":
@@ -276,29 +290,28 @@ class AuctionApp:
             self.show_toast(msg_text, bg="#2E7D32")
             if "REGISTER" in str(msg_text).upper(): self.show_login_screen()
 
-        elif msg_type == 810: # S2C_ROOM_LIST
-            if hasattr(self, 'dashboard_frame'): 
-                self.dashboard_frame.update_room_list(data.get("rooms", []))
+        elif msg_type == 810: # Room List
+            if hasattr(self, 'dashboard_frame'): self.dashboard_frame.update_room_list(data.get("rooms", []))
 
-        elif msg_type == 811: # S2C_SEARCH_RESULT
+        elif msg_type == 811: # Search Result
             self.show_search_results(data.get("results", []))
 
-        elif msg_type == 812: # S2C_HISTORY_LIST
+        elif msg_type == 812: # History List
             history = data.get("history", [])
-            h_str = "\n".join([f"• {h['item']}: {h['price']:,} VND" for h in history])
-            messagebox.showinfo("Lịch sử", h_str if h_str else "Trống")
+            if history:
+                self.show_history_window(history)
+            else:
+                messagebox.showinfo("Thông báo", "Bạn chưa có lịch sử giao dịch nào.")
 
-        elif msg_type == 820: # S2C_USER_LIST (Admin)
+        elif msg_type == 820: # User List (Admin)
             self.show_admin_user_management(data.get("users", []))
 
-        # --- NHÓM 9xx: Điều khiển Phòng Đấu giá ---
-
-        elif msg_type == 901: # S2C_JOIN_ROOM_SUCCESS
+        # --- NHÓM 9xx: Phòng Đấu giá ---
+        elif msg_type == 901: # Join thành công
             self.show_auction_room(data.get("room_id"))
-            if hasattr(self, 'room_frame'):
-                self.room_frame.update_auction_state(data)
+            self.room_frame.update_auction_state(data)
 
-        elif msg_type in [902, 903, 904, 905, 906, 907]: # Cập nhật trạng thái phiên đấu giá
+        elif msg_type in [902, 903, 904, 905, 906, 907]:
             if hasattr(self, 'room_frame'):
                 self.room_frame.update_auction_state(data)
                 if msg_type == 906:
@@ -306,9 +319,8 @@ class AuctionApp:
                     price = data.get("final_price", 0)
                     self.show_toast(f"🏆 {winner} thắng ({price:,} VND)", duration=5000, bg="#B71C1C")
 
-        elif msg_type == 908: # S2C_CHAT
-            if hasattr(self, 'room_frame'):
-                self.room_frame.display_chat_message(data.get("username"), data.get("message"))
+        elif msg_type == 908: # Chat
+            if hasattr(self, 'room_frame'): self.room_frame.display_chat_message(data.get("username"), data.get("message"))
 
 if __name__ == "__main__":
     app_root = tk.Tk()
