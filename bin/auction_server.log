@@ -391,3 +391,10 @@
 [Mon Jan  5 14:07:24 2026] User: bid1       | Action: Used Buy Now option
 [Mon Jan  5 14:07:30 2026] User: bid1       | Action: Used Buy Now option
 [Mon Jan  5 14:07:35 2026] User: bid1       | Action: Da roi khoi phong
+[Mon Jan  5 20:55:22 2026] User: bid1       | Action: LOGGED IN
+[Mon Jan  5 20:55:29 2026] User: auc1       | Action: LOGGED IN
+[Mon Jan  5 20:56:20 2026] User: auc1       | Action: Da tao phong dau gia moi
+[Mon Jan  5 20:56:25 2026] User: bid1       | Action: Tham gia vao phong
+[Mon Jan  5 20:56:28 2026] User: auc1       | Action: Tham gia vao phong
+[Mon Jan  5 20:57:17 2026] User: bid2       | Action: LOGGED IN
+[Mon Jan  5 20:57:19 2026] User: bid2       | Action: Tham gia vao phong

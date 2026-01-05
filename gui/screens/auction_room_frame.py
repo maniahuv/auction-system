@@ -33,9 +33,9 @@ class AuctionRoomFrame(tk.Frame):
 
         # --- Danh sách hàng chờ (Queue Management) ---
         self.queue_frame = tk.LabelFrame(self, text=" Danh sách hàng chờ (Tiếp theo) ", padx=10, pady=10, font=("Arial", 10, "bold"))
-        self.queue_frame.pack(fill="both", expand=True, padx=30, pady=10)
+        self.queue_frame.pack(fill="both", expand=True, padx=30, pady=5)
 
-        self.list_queue = tk.Listbox(self.queue_frame, height=5, font=("Arial", 11), selectmode=tk.SINGLE)
+        self.list_queue = tk.Listbox(self.queue_frame, height=4, font=("Arial", 11), selectmode=tk.SINGLE)
         self.list_queue.pack(side="left", fill="both", expand=True)
         
         q_scroll = tk.Scrollbar(self.queue_frame, orient="vertical", command=self.list_queue.yview)
@@ -47,7 +47,6 @@ class AuctionRoomFrame(tk.Frame):
             self.mgr_btn_frame = tk.Frame(self.queue_frame)
             self.mgr_btn_frame.pack(side="right", padx=10)
             
-            # Gán thuộc tính để có thể ẩn/khóa khi đấu giá bắt đầu
             self.btn_start = tk.Button(self.mgr_btn_frame, text="▶ BẮT ĐẦU", bg="#4CAF50", fg="white", 
                                       font=("Arial", 9, "bold"), width=12, command=self.send_start_auction)
             self.btn_start.pack(pady=5)
@@ -59,6 +58,28 @@ class AuctionRoomFrame(tk.Frame):
             self.btn_delete = tk.Button(self.mgr_btn_frame, text="❌ Xóa chọn", bg="#FFEBEE", fg="red", font=("Arial", 9, "bold"), width=12,
                                        command=self.delete_selected_item)
             self.btn_delete.pack(pady=5)
+
+        # --- Khung Trò chuyện (Chat) ---
+        self.chat_frame = tk.LabelFrame(self, text=" Trò chuyện trực tuyến ", padx=10, pady=10, font=("Arial", 10, "bold"))
+        self.chat_frame.pack(fill="both", expand=True, padx=30, pady=5)
+
+        self.chat_display = tk.Text(self.chat_frame, height=6, state="disabled", font=("Arial", 10))
+        self.chat_display.pack(side="top", fill="both", expand=True)
+        
+        c_scroll = tk.Scrollbar(self.chat_display, orient="vertical", command=self.chat_display.yview)
+        c_scroll.pack(side="right", fill="y")
+        self.chat_display.config(yscrollcommand=c_scroll.set)
+
+        self.chat_input_frame = tk.Frame(self.chat_frame)
+        self.chat_input_frame.pack(side="bottom", fill="x", pady=(5, 0))
+
+        self.ent_chat = tk.Entry(self.chat_input_frame, font=("Arial", 11))
+        self.ent_chat.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        self.ent_chat.bind("<Return>", lambda e: self.send_chat())
+
+        self.btn_send_chat = tk.Button(self.chat_input_frame, text="Gửi", bg="#2196F3", fg="white", 
+                                       font=("Arial", 9, "bold"), width=8, command=self.send_chat)
+        self.btn_send_chat.pack(side="right")
 
         # --- Khu vực điều khiển Đấu giá (Dành cho Bidder) ---
         self.control_frame = tk.Frame(self)
@@ -76,6 +97,7 @@ class AuctionRoomFrame(tk.Frame):
                                      font=("Arial", 11, "bold"), width=30, pady=5, command=self.send_buy_now)
         self.btn_buy_now.pack(pady=10)
 
+        # Nút rời phòng
         self.footer_frame = tk.Frame(self)
         self.footer_frame.pack(side="bottom", fill="x", pady=15)
         tk.Button(self.footer_frame, text="⬅ Rời khỏi phòng", font=("Arial", 10), command=self.leave_room).pack()
@@ -89,7 +111,6 @@ class AuctionRoomFrame(tk.Frame):
     def reset_ui_state(self):
         """Khôi phục trạng thái UI dựa trên vai trò và biến is_started"""
         is_bidder = (self.controller.user_role == 1)
-        # Chỉ cho phép Bidder tương tác khi phiên đã bắt đầu
         state = "normal" if (is_bidder and self.is_started) else "disabled"
         
         self.btn_bid.config(state=state, bg="#4CAF50" if state == "normal" else "#ccc")
@@ -104,17 +125,14 @@ class AuctionRoomFrame(tk.Frame):
         """Cập nhật dữ liệu từ Server gửi về (901, 903, 904, 906, 902, 907)"""
         msg_type = data.get("type")
         
-        # Cập nhật trạng thái bắt đầu từ Server
         if "is_started" in data:
             self.is_started = bool(data.get("is_started"))
 
-        # 901: Join | 903: Bắt đầu | 904: Có thầu mới
         if msg_type in [901, 903, 904]:
             self.lbl_current_price.config(text=f"Giá hiện tại: {data.get('current_price', 0):,} VND")
             self.lbl_bidder.config(text=f"Người giữ giá: {data.get('bidder', 'Chưa có')}")
             
             if msg_type == 903:
-                # Ẩn nút Bắt đầu và khóa chỉnh sửa hàng chờ cho Auctioneer
                 if self.controller.user_role == 2:
                     self.btn_start.pack_forget()
                     self.btn_add.config(state="disabled")
@@ -126,7 +144,6 @@ class AuctionRoomFrame(tk.Frame):
                     self.lbl_item_name.config(text=f"Vật phẩm: {data.get('item_title')}")
                 if "queue" in data:
                     self.update_queue_list(data.get("queue"))
-                # Nếu join phòng đã bắt đầu, ẩn nút Start cho Auctioneer
                 if self.is_started and self.controller.user_role == 2:
                     self.btn_start.pack_forget()
                     self.btn_add.config(state="disabled")
@@ -136,7 +153,6 @@ class AuctionRoomFrame(tk.Frame):
                 self.update_timer(data.get("time_left"))
             self.reset_ui_state()
             
-        # 906: Phiên kết thúc
         elif msg_type == 906:
             self.lbl_timer.config(text="PHIÊN KẾT THÚC", fg="white", bg="#B71C1C")
             self.timer_container.config(bg="#B71C1C")
@@ -144,7 +160,6 @@ class AuctionRoomFrame(tk.Frame):
             self.btn_buy_now.config(state="disabled", bg="#ccc")
             self.ent_bid.config(state="disabled")
             
-        # 902: Chuyển món tiếp theo
         elif msg_type == 902:
             self.reset_ui_state()
             self.lbl_item_name.config(text=f"Vật phẩm: {data.get('title', '---')}")
@@ -152,7 +167,6 @@ class AuctionRoomFrame(tk.Frame):
             self.lbl_bidder.config(text="Người giữ giá: Chưa có")
             self.ent_bid.delete(0, tk.END)
 
-        # 907: Cập nhật hàng chờ độc lập
         elif msg_type == 907:
             if "queue" in data:
                 self.update_queue_list(data.get("queue"))
@@ -182,10 +196,27 @@ class AuctionRoomFrame(tk.Frame):
             status = "[ĐANG ĐẤU]" if idx == 0 else f"[#Kế tiếp {idx}]"
             self.list_queue.insert(tk.END, f"{status} {item['title']} - {item['start_price']:,} VND")
 
+    # --- LOGIC TRÒ CHUYỆN (CHAT) ---
+
+    def send_chat(self):
+        """Gửi tin nhắn chat (C2S_CHAT = 207)"""
+        msg = self.ent_chat.get().strip()
+        if msg:
+            self.controller.backend.send_command({"type": 207, "message": msg})
+            self.ent_chat.delete(0, tk.END)
+
+    def display_chat_message(self, username, message):
+        """Hiển thị tin nhắn mới lên màn hình chat (Mã 908)"""
+        self.chat_display.config(state="normal")
+        self.chat_display.insert(tk.END, f"{username}: ", "username")
+        self.chat_display.insert(tk.END, f"{message}\n")
+        self.chat_display.tag_config("username", foreground="#1976D2", font=("Arial", 10, "bold"))
+        self.chat_display.see(tk.END)
+        self.chat_display.config(state="disabled")
+
     # --- LOGIC QUẢN LÝ (AUCTIONEER - ROLE 2) ---
 
     def send_start_auction(self):
-        """Gửi lệnh bắt đầu phiên đấu giá (C2S_START_AUCTION = 206)"""
         if messagebox.askyesno("Xác nhận", "Bắt đầu đấu giá ngay bây giờ?\nSau khi bắt đầu sẽ KHÔNG thể thêm/xóa vật phẩm."):
             self.controller.backend.send_command({"type": 206})
 
@@ -193,21 +224,18 @@ class AuctionRoomFrame(tk.Frame):
         if self.is_started:
             messagebox.showerror("Lỗi", "Không thể thêm vật phẩm khi phiên đã bắt đầu!")
             return
-        # Popup logic...
         add_win = tk.Toplevel(self)
         add_win.title("Thêm vật phẩm vào hàng chờ")
         add_win.geometry("380x350")
         add_win.grab_set()
         main_f = tk.Frame(add_win, padx=25, pady=20)
         main_f.pack(fill="both", expand=True)
-        
         tk.Label(main_f, text="Tên vật phẩm:").pack(anchor="w")
         ent_title = tk.Entry(main_f, font=("Arial", 11)); ent_title.pack(fill="x", pady=5)
         tk.Label(main_f, text="Giá khởi điểm (VND):").pack(anchor="w")
         ent_price = tk.Entry(main_f, font=("Arial", 11)); ent_price.pack(fill="x", pady=5)
         tk.Label(main_f, text="Giá mua ngay (VND):").pack(anchor="w")
         ent_buy = tk.Entry(main_f, font=("Arial", 11)); ent_buy.pack(fill="x", pady=5)
-
         def submit():
             try:
                 t, p, b = ent_title.get().strip(), int(ent_price.get()), int(ent_buy.get())
