@@ -17,7 +17,8 @@ typedef enum {
     C2S_LEAVE_ROOM = 204,	// (Bidder)
     C2S_SEARCH_ITEM = 205,  // (Auctioneer)
     C2S_START_AUCTION = 206, // (Auctioneer)
-    
+    C2S_CHAT = 207,
+
     // 3.Vat pham do nguoi dau gia tao 
     C2S_CREATE_ITEM = 301,	// (Auctioneer)
     C2S_DELETE_ITEM = 302,
@@ -52,6 +53,7 @@ typedef enum {
     S2C_NEW_BID = 904,         		// Thong bao gia moi duoc cap nhat
     S2C_TIME_ALERT = 905,      		// Canh bao con 30s
     S2C_AUCTION_ENDED = 906,   		// Thong bao ket thuc phien dau gia
+    S2C_CHAT = 908
     
 } ServerMessageType;
 

@@ -41,6 +41,7 @@ class AuctionApp:
             self.current_frame.destroy()
 
     def show_login_screen(self):
+        """Hiển thị màn hình đăng nhập"""
         self.clear_frame()
         self.current_frame = tk.Frame(self.container)
         self.current_frame.pack(expand=True)
@@ -63,6 +64,7 @@ class AuctionApp:
                   relief="flat", fg="#666", command=self.show_register_screen).pack()
 
     def show_register_screen(self):
+        """Hiển thị màn hình đăng ký"""
         self.clear_frame()
         self.current_frame = tk.Frame(self.container)
         self.current_frame.pack(expand=True)
@@ -89,12 +91,14 @@ class AuctionApp:
                   relief="flat", fg="#666", command=self.show_login_screen).pack()
 
     def show_dashboard(self):
+        """Hiển thị bảng điều khiển chính"""
         self.clear_frame()
         self.dashboard_frame = DashboardFrame(self.container, self)
         self.dashboard_frame.pack(fill="both", expand=True)
         self.current_frame = self.dashboard_frame
 
     def show_auction_room(self, room_id):
+        """Hiển thị giao diện phòng đấu giá cụ thể"""
         self.clear_frame()
         self.room_frame = AuctionRoomFrame(self.container, self)
         self.room_frame.set_room_info(room_id)
@@ -102,7 +106,7 @@ class AuctionApp:
         self.current_frame = self.room_frame
 
     def show_search_results(self, results):
-        """Hiển thị kết quả tìm kiếm trong cửa sổ Pop-up chuyên nghiệp"""
+        """Hiển thị kết quả tìm kiếm vật phẩm"""
         search_win = tk.Toplevel(self.root)
         search_win.title("Kết quả tìm kiếm hệ thống")
         search_win.geometry("700x450")
@@ -138,12 +142,14 @@ class AuctionApp:
     # --- XỬ LÝ LỆNH TỚI BACKEND ---
 
     def login(self):
+        """Gửi yêu cầu đăng nhập tới Server (C2S_LOGIN = 102)"""
         user = self.ent_user.get().strip()
         pw = self.ent_pass.get().strip()
         if user and pw:
             self.backend.send_command({"type": 102, "user": user, "pass": pw})
 
     def register(self):
+        """Gửi yêu cầu đăng ký tới Server (C2S_REGISTER = 101)"""
         user = self.ent_reg_user.get().strip()
         pw = self.ent_reg_pass.get().strip()
         role = self.role_var.get()
@@ -153,6 +159,7 @@ class AuctionApp:
     # --- XỬ LÝ PHẢN HỒI TỪ SERVER (PROTOCOL HANDLING) ---
 
     def handle_server_response(self, data):
+        """Bộ điều phối chính xử lý tất cả tin nhắn từ Server trả về"""
         print(f"DEBUG: Server Protocol -> {data}") 
         msg_type = data.get("type")
         
@@ -202,7 +209,7 @@ class AuctionApp:
             if "queue" in data:
                 self.room_frame.update_queue_list(data.get("queue"))
 
-        elif msg_type == 903: # PHIÊN ĐẤU GIÁ CHÍNH THỨC BẮT ĐẦU (Gửi tới cả phòng)
+        elif msg_type == 903: # PHIÊN ĐẤU GIÁ CHÍNH THỨC BẮT ĐẦU
             if hasattr(self, 'room_frame'):
                 self.room_frame.update_auction_state(data)
 
@@ -229,12 +236,16 @@ class AuctionApp:
             if hasattr(self, 'room_frame'):
                 self.room_frame.update_queue_list(data.get("queue"))
 
+        elif msg_type == 908: # NHẬN TIN NHẮN CHAT (S2C_CHAT)
+            if hasattr(self, 'room_frame'):
+                self.room_frame.display_chat_message(data.get("username"), data.get("message"))
+
 if __name__ == "__main__":
     app_root = tk.Tk()
     app = AuctionApp(app_root)
     
     def on_closing():
-        app.backend.stop() # Tắt Client Daemon
+        app.backend.stop() # Tắt Client Daemon khi đóng ứng dụng
         app_root.destroy()
 
     app_root.protocol("WM_DELETE_WINDOW", on_closing)

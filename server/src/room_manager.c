@@ -348,3 +348,26 @@ char *handle_get_history(int fd) {
     if (!u || !u->is_logged_in) return create_error_response(ERR_UNKNOWN, "Yeu cau dang nhap!");
     return db_get_history_json(u->username, u->role);
 }
+
+// Xu ly truyen tin chat trong phong dau gia
+char *handle_chat(int fd, cJSON *json) {
+    UserState *u = get_user_by_fd(fd);
+    if (!u || u->current_room_id == -1) 
+        return create_error_response(ERR_UNKNOWN, "Ban phai tham gia phong dau gia truoc!");
+
+    const char *message = get_json_string(json, "message"); //
+    if (!message || strlen(message) == 0) return NULL;
+
+    // Tạo tin nhắn broadcast
+    cJSON *chat_notif = cJSON_CreateObject();
+    cJSON_AddNumberToObject(chat_notif, "type", S2C_CHAT); // Mã 908
+    cJSON_AddStringToObject(chat_notif, "username", u->username);
+    cJSON_AddStringToObject(chat_notif, "message", message);
+    
+    char *s = cJSON_PrintUnformatted(chat_notif);
+    broadcast_to_room(u->current_room_id, s); //
+    
+    free(s);
+    cJSON_Delete(chat_notif);
+    return NULL; 
+}
