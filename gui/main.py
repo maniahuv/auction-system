@@ -41,20 +41,16 @@ class AuctionApp:
                        padx=25, pady=12, font=("Arial", 11, "bold"))
         lbl.pack()
 
-        # Cập nhật để lấy kích thước chính xác
         toast.update_idletasks()
         
-        # Tính toán vị trí hiển thị giữa màn hình chính
         main_x = self.root.winfo_x()
         main_y = self.root.winfo_y()
         main_width = self.root.winfo_width()
         
         x = main_x + (main_width // 2) - (toast.winfo_width() // 2)
-        y = main_y + 100  # Hiển thị ở phía trên một chút cho dễ nhìn
+        y = main_y + 100 
         
         toast.geometry(f"+{x}+{y}")
-        
-        # Tự động đóng
         self.root.after(duration, toast.destroy)
 
     def queue_server_response(self, data):
@@ -155,6 +151,7 @@ class AuctionApp:
     # --- XỬ LÝ PROTOCOL ---
 
     def handle_server_response(self, data):
+        """Bộ điều phối chính xử lý phản hồi từ Server (Đã sửa lỗi update_timer)"""
         msg_type = data.get("type")
         
         if msg_type == 802: # Login Success
@@ -176,50 +173,59 @@ class AuctionApp:
                 self.show_toast("Đã rời phòng thành công", duration=1500)
                 self.root.after(100, lambda: self.backend.send_command({"type": 201}))
                 return
-            
             self.show_toast(msg_text, bg="#2E7D32")
             if "REGISTER" in str(msg_text).upper(): self.show_login_screen()
 
-        elif msg_type == 810: # Room Update
-            if hasattr(self, 'dashboard_frame'): self.dashboard_frame.update_room_list(data.get("rooms", []))
+        elif msg_type == 810: # Cập nhật danh sách phòng
+            if hasattr(self, 'dashboard_frame'): 
+                self.dashboard_frame.update_room_list(data.get("rooms", []))
 
-        elif msg_type == 811: self.show_search_results(data.get("results", []))
+        elif msg_type == 811: 
+            self.show_search_results(data.get("results", []))
 
-        elif msg_type == 812: # History
+        elif msg_type == 812: # Lịch sử
             history = data.get("history", [])
             h_str = "\n".join([f"• {h['item']}: {h['price']:,} VND" for h in history])
             messagebox.showinfo("Lịch sử", h_str if h_str else "Trống")
 
-        # --- NHÓM 9xx (Room Controls) ---
+        # --- NHÓM 9xx: Điều khiển Phòng Đấu giá (Đồng bộ thời gian chuẩn) ---
 
-        elif msg_type == 901: # Join Room
+        elif msg_type == 901: # Vào phòng thành công
             self.show_auction_room(data.get("room_id"))
             self.room_frame.update_auction_state(data)
 
-        elif msg_type == 903: # Auction Started
-            if hasattr(self, 'room_frame'): self.room_frame.update_auction_state(data)
+        elif msg_type == 903: # Bắt đầu phiên
+            if hasattr(self, 'room_frame'):
+                self.room_frame.update_auction_state(data)
 
-        elif msg_type == 904: # New Bid
-            if hasattr(self, 'room_frame'): self.room_frame.update_auction_state(data)
+        elif msg_type == 904: # Có giá thầu mới (Reset thời gian nếu Server gửi kèm)
+            if hasattr(self, 'room_frame'):
+                self.room_frame.update_auction_state(data)
+                if "time_left" in data:
+                    self.room_frame.sync_timer(data.get("time_left"))
 
-        elif msg_type == 905: # Time Alert
-            if hasattr(self, 'room_frame'): self.room_frame.update_timer(data.get("time_left"))
+        elif msg_type == 905: # Cảnh báo thời gian từ Server (SỬA LỖI TẠI ĐÂY)
+            if hasattr(self, 'room_frame'):
+                self.room_frame.sync_timer(data.get("time_left"))
 
-        elif msg_type == 902: # New Item
-            if hasattr(self, 'room_frame'): self.room_frame.update_auction_state(data)
+        elif msg_type == 902: # Vật phẩm mới
+            if hasattr(self, 'room_frame'):
+                self.room_frame.update_auction_state(data)
 
-        elif msg_type == 906: # Item Ended
+        elif msg_type == 906: # Kết thúc vật phẩm
             if hasattr(self, 'room_frame'):
                 self.room_frame.update_auction_state(data)
                 winner = data.get("winner", "Không có")
                 price = data.get("final_price", 0)
                 self.show_toast(f"🏆 {winner} thắng ({price:,} VND)", duration=5000, bg="#B71C1C")
 
-        elif msg_type == 907: # Queue Update
-            if hasattr(self, 'room_frame'): self.room_frame.update_queue_list(data.get("queue"))
+        elif msg_type == 907: # Cập nhật hàng chờ
+            if hasattr(self, 'room_frame'):
+                self.room_frame.update_queue_list(data.get("queue"))
 
         elif msg_type == 908: # Chat
-            if hasattr(self, 'room_frame'): self.room_frame.display_chat_message(data.get("username"), data.get("message"))
+            if hasattr(self, 'room_frame'):
+                self.room_frame.display_chat_message(data.get("username"), data.get("message"))
 
 if __name__ == "__main__":
     app_root = tk.Tk()

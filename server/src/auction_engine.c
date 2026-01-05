@@ -57,6 +57,7 @@ void check_auctions() {
                     r->highest_bidder_id = -1;
                     r->end_time = now + 60; // Reset 60 giay cho vat pham tiep theo
                     r->sent_warning = 0;
+                    r->is_started = 1;
 
                     // CẬP NHẬT TRẠNG THÁI VẬT PHẨM MỚI VÀO DATABASE
                     db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
@@ -66,6 +67,9 @@ void check_auctions() {
                     cJSON_AddNumberToObject(next, "type", S2C_NEW_ITEM_PENDING);
                     cJSON_AddStringToObject(next, "title", r->queue[r->current_item_idx].title);
                     cJSON_AddNumberToObject(next, "start_price", r->current_price);
+                    cJSON_AddNumberToObject(next, "is_started", 1); 
+                    cJSON_AddNumberToObject(next, "time_left", 60);
+                    
                     char *s_next = cJSON_PrintUnformatted(next);
                     broadcast_to_room(r->room_id, s_next);
                     free(s_next); cJSON_Delete(next);
