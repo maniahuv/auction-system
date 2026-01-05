@@ -26,12 +26,17 @@ class DashboardFrame(tk.Frame):
         tk.Button(toolbar, text="Tìm", font=("Arial", 10, "bold"), 
                   bg="#f0f0f0", command=self.search_item).pack(side="left", padx=2)
         
-        # Chỉ hiển thị nút "Tạo phòng" nếu người dùng là AUCTIONEER (Role 2)
+        # 1. Chỉ hiển thị nút "Tạo phòng" nếu người dùng là AUCTIONEER (Role 2)
         if self.controller.user_role == 2:
             tk.Button(toolbar, text="➕ Tạo phòng mới", font=("Arial", 10),
                       bg="#E3F2FD", command=self.open_create_room).pack(side="left", padx=15)
+
+        # 2. MỚI: Chỉ hiển thị nút "Quản lý người dùng" nếu người dùng là ADMIN (Role 3)
+        if self.controller.user_role == 3:
+            tk.Button(toolbar, text="👥 Quản lý người dùng", font=("Arial", 10, "bold"),
+                      bg="#FFF9C4", command=self.open_admin_panel).pack(side="left", padx=15)
         
-        # Nút Đăng xuất - Cập nhật callback để tránh lỗi show_frame
+        # Nút Đăng xuất
         tk.Button(toolbar, text="🚪 Đăng xuất", font=("Arial", 10, "bold"),
                   fg="white", bg="#e74c3c", command=self.on_logout).pack(side="right", padx=5)
 
@@ -72,23 +77,27 @@ class DashboardFrame(tk.Frame):
 
     # --- LOGIC XỬ LÝ ---
 
+    def open_admin_panel(self):
+        """Gửi yêu cầu lấy danh sách toàn bộ User (Mã 601)"""
+        self.controller.backend.admin_list_users()
+
     def on_logout(self):
-        """Xử lý đăng xuất (Mã 103) - Đã sửa lỗi gọi hàm chuyển màn hình"""
+        """Xử lý đăng xuất (Mã 103)"""
         if messagebox.askyesno("Xác nhận", "Bạn có chắc chắn muốn đăng xuất?"):
-            # Gửi yêu cầu đăng xuất tới server (C2S_LOGOUT = 103)
-            self.controller.backend.send_command({"type": 103})
-            # SỬA LỖI: Gọi đúng hàm show_login_screen() trong main.py thay vì show_frame()
+            # Gửi yêu cầu đăng xuất tới server
+            self.controller.backend.logout()
+            # Quay lại màn hình Login
             self.controller.show_login_screen()
 
     def refresh_rooms(self):
-        self.controller.backend.send_command({"type": 201})
+        self.controller.backend.list_rooms()
 
     def search_item(self):
         keyword = self.ent_search.get().strip()
         if not keyword:
             messagebox.showwarning("Chú ý", "Vui lòng nhập từ khóa tìm kiếm!")
             return
-        self.controller.backend.send_command({"type": 205, "keyword": keyword})
+        self.controller.backend.search_item(keyword)
 
     def update_room_list(self, rooms_data):
         """Cập nhật dữ liệu vào bảng (S2C_ROOM_LIST = 810)"""
@@ -119,17 +128,14 @@ class DashboardFrame(tk.Frame):
             selected_item = self.tree.item(self.tree.selection()[0])
             # Lưu tên phòng vào controller để hiển thị ở màn hình Room
             self.controller.current_room_name = selected_item['values'][1]
-            
-            self.controller.backend.send_command({
-                "type": 203, 
-                "room_id": int(room_id)
-            })
+            # Gửi lệnh tham gia phòng (Mã 203)
+            self.controller.backend.join_room(room_id)
 
     def on_item_double_click(self, event):
         self.join_selected_room()
 
     def view_history(self):
-        self.controller.backend.send_command({"type": 501})
+        self.controller.backend.get_history()
 
     def open_create_room(self):
         """Mở popup tạo phòng với trường Tên phòng mới"""
@@ -173,14 +179,8 @@ class DashboardFrame(tk.Frame):
                 price = int(p_str)
                 buy = int(b_str)
                 
-                # Gửi kèm trường room_name lên server (Mã 202)
-                self.controller.backend.send_command({
-                    "type": 202,
-                    "room_name": r_name,
-                    "title": title,
-                    "start_price": price,
-                    "buy_now": buy
-                })
+                # Gửi lệnh tạo phòng (Mã 202)
+                self.controller.backend.create_room(r_name, title, price, buy)
                 create_win.destroy()
                 self.after(500, self.refresh_rooms)
                 

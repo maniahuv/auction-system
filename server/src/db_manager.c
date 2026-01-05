@@ -263,6 +263,54 @@ int db_load_active_auctions(void *rooms_array) {
     return 0;
 }
 
+// Lấy danh sách toàn bộ người dùng dưới dạng JSON
+char* db_get_all_users_json() {
+    sqlite3_stmt *res;
+    const char *sql = "SELECT id, username, role FROM users;";
+    
+    if (sqlite3_prepare_v2(db, sql, -1, &res, 0) != SQLITE_OK) return NULL;
+    
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "type", S2C_USER_LIST);
+    cJSON *arr = cJSON_CreateArray();
+
+    while (sqlite3_step(res) == SQLITE_ROW) {
+        cJSON *obj = cJSON_CreateObject();
+        cJSON_AddNumberToObject(obj, "id", sqlite3_column_int(res, 0));
+        cJSON_AddStringToObject(obj, "username", (const char*)sqlite3_column_text(res, 1));
+        cJSON_AddNumberToObject(obj, "role", sqlite3_column_int(res, 2));
+        cJSON_AddItemToArray(arr, obj);
+    }
+    cJSON_AddItemToObject(resp, "users", arr);
+    sqlite3_finalize(res);
+    char *out = cJSON_PrintUnformatted(resp);
+    cJSON_Delete(resp);
+    return out;
+}
+
+// Xóa người dùng theo ID
+int db_delete_user_by_id(int user_id) {
+    sqlite3_stmt *stmt;
+    const char *sql = "DELETE FROM users WHERE id = ?;";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK) return -1;
+    sqlite3_bind_int(stmt, 1, user_id);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE) ? 0 : -1;
+}
+
+// Cập nhật Role cho người dùng
+int db_update_user_role(int user_id, int new_role) {
+    sqlite3_stmt *stmt;
+    const char *sql = "UPDATE users SET role = ? WHERE id = ?;";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK) return -1;
+    sqlite3_bind_int(stmt, 1, new_role);
+    sqlite3_bind_int(stmt, 2, user_id);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE) ? 0 : -1;
+}
+
 // Dong ket noi database
 void db_close() {
     if (db) sqlite3_close(db);

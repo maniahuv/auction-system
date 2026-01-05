@@ -640,3 +640,21 @@
 [Tue Jan  6 01:12:24 2026] User: auc1       | Action: LOGGED IN
 [Tue Jan  6 01:12:36 2026] User: auc1       | Action: Tham gia vao phong
 [Tue Jan  6 01:12:53 2026] User: auc1       | Action: Da roi khoi phong
+[Tue Jan  6 01:22:23 2026] User: auc1       | Action: LOGGED IN
+[Tue Jan  6 01:22:27 2026] User: auc1       | Action: LOGGED OUT
+[Tue Jan  6 01:22:34 2026] User: bid1       | Action: LOGGED IN
+[Tue Jan  6 01:41:45 2026] User: admin      | Action: LOGGED IN
+[Tue Jan  6 01:48:05 2026] User: admin      | Action: LOGGED IN
+[Tue Jan  6 01:48:51 2026] User: admin      | Action: LOGGED OUT
+[Tue Jan  6 01:48:58 2026] User: admin      | Action: LOGGED IN
+[Tue Jan  6 01:49:35 2026] User: admin      | Action: LOGGED OUT
+[Tue Jan  6 01:50:46 2026] User: admin      | Action: LOGGED IN
+[Tue Jan  6 01:54:58 2026] User: admin      | Action: LOGGED IN
+[Tue Jan  6 01:55:23 2026] User: nam        | Action: LOGGED IN
+[Tue Jan  6 01:55:28 2026] User: nam        | Action: LOGGED OUT
+[Tue Jan  6 01:55:35 2026] User: admin      | Action: ADMIN: Da xoa user ID
+[Tue Jan  6 01:57:22 2026] User: bid1       | Action: LOGGED IN
+[Tue Jan  6 02:00:37 2026] User: admin      | Action: LOGGED IN
+[Tue Jan  6 02:01:14 2026] User: bid4       | Action: LOGGED IN
+[Tue Jan  6 02:01:18 2026] User: bid4       | Action: LOGGED OUT
+[Tue Jan  6 02:01:33 2026] User: bid4       | Action: LOGGED IN

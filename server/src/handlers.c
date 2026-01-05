@@ -3,6 +3,7 @@
 #include "auction_engine.h"
 #include "room_manager.h"
 #include "json_util.h"
+#include "admin_handler.h"
 
 // Xu ly tin nhan nhan tu client
 char *handle_client_message(int fd, cJSON *json) {
@@ -26,6 +27,9 @@ char *handle_client_message(int fd, cJSON *json) {
         case C2S_CHAT:        return handle_chat(fd, json);
         case C2S_UPDATE_ITEM: return handle_update_item(fd, json);
         case C2S_LOGOUT:      return handle_logout(fd);
+        case C2S_ADMIN_LIST_USERS:       return handle_admin_list_users(fd);
+        case C2S_ADMIN_DELETE_USER:     return handle_admin_delete_user(fd, json);
+        case C2S_ADMIN_UPDATE_USER_ROLE: return handle_admin_update_role(fd, json);
         default:
             return create_error_response(ERR_UNKNOWN, "Unknown command");
     }

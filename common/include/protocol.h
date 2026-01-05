@@ -26,13 +26,17 @@ typedef enum {
     // Liet ke vat pham dau gia 
     C2S_LIST_MY_ITEMS = 303,// (Auctioneer)
     C2S_UPDATE_ITEM = 304,
-    
+
     // 4.Nguoi mua dau gia 
     C2S_BID = 401,		// (Bidder)
     C2S_BUY_NOW = 402,	// (Bidder)
 
     // 5.Nguoi dau gia xem lich su dau gia
     C2S_GET_HISTORY = 501,  // (Bidder)
+
+    C2S_ADMIN_LIST_USERS = 601,
+    C2S_ADMIN_DELETE_USER = 602,
+    C2S_ADMIN_UPDATE_USER_ROLE = 603,
 } ClientMessageType;
 
 typedef enum {
@@ -47,7 +51,7 @@ typedef enum {
     S2C_ROOM_LIST = 810,
     S2C_SEARCH_RESULT = 811,
     S2C_HISTORY_LIST = 812,
-    
+    S2C_USER_LIST = 820,
     // 9.Cap nhat thong tin trong phong dau gia, Thong bao broadcast cho moi nguoi
     S2C_JOIN_ROOM_SUCCESS = 901,	// Thong bao co nguoi join phong
     S2C_NEW_ITEM_PENDING = 902, 	// Thong bao phien moi dang dien ra
