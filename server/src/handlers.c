@@ -22,6 +22,8 @@ char *handle_client_message(int fd, cJSON *json) {
         case C2S_BID:         return handle_bid(fd, json);
         case C2S_BUY_NOW:     return handle_buy_now(fd, json);
         case C2S_GET_HISTORY: return handle_get_history(fd);
+        case C2S_START_AUCTION: return handle_start_auction(fd);
+
         default:
             return create_error_response(ERR_UNKNOWN, "Unknown command");
     }

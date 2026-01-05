@@ -202,6 +202,10 @@ class AuctionApp:
             if "queue" in data:
                 self.room_frame.update_queue_list(data.get("queue"))
 
+        elif msg_type == 903: # PHIÊN ĐẤU GIÁ CHÍNH THỨC BẮT ĐẦU (Gửi tới cả phòng)
+            if hasattr(self, 'room_frame'):
+                self.room_frame.update_auction_state(data)
+
         elif msg_type == 904: # Có giá thầu mới
             if hasattr(self, 'room_frame'):
                 self.room_frame.update_auction_state(data)
@@ -212,7 +216,6 @@ class AuctionApp:
 
         elif msg_type == 902: # CHUYỂN PHIÊN (Vật phẩm mới bắt đầu)
             if hasattr(self, 'room_frame'):
-                # Quan trọng: Gọi update_auction_state để reset nút bấm và nhãn
                 self.room_frame.update_auction_state(data)
 
         elif msg_type == 906: # Phiên của vật phẩm hiện tại kết thúc

@@ -26,6 +26,7 @@ typedef struct {
 typedef struct {
   int room_id;
   int is_active;
+  int is_started;
   char owner_username[50];
   
   // --- QUAN LY HANG CHO ---

@@ -16,6 +16,7 @@ typedef enum {
     C2S_JOIN_ROOM = 203,	// (Bidder)
     C2S_LEAVE_ROOM = 204,	// (Bidder)
     C2S_SEARCH_ITEM = 205,  // (Auctioneer)
+    C2S_START_AUCTION = 206, // (Auctioneer)
     
     // 3.Vat pham do nguoi dau gia tao 
     C2S_CREATE_ITEM = 301,	// (Auctioneer)
