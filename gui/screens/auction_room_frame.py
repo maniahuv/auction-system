@@ -86,15 +86,16 @@ class AuctionRoomFrame(tk.Frame):
         self.control_frame.pack(pady=10)
 
         tk.Label(self.control_frame, text="Mức giá của bạn:", font=("Arial", 11)).grid(row=0, column=0, padx=5)
-        self.ent_bid = tk.Entry(self.control_frame, width=15, font=("Arial", 12))
+        self.interaction_state = "normal" if self.controller.user_role == 1 else "disabled"
+        self.ent_bid = tk.Entry(self.control_frame, width=15, font=("Arial", 12), state=self.interaction_state)
         self.ent_bid.grid(row=0, column=1, padx=5)
 
         self.btn_bid = tk.Button(self.control_frame, text="ĐẶT THẦU (BID)", bg="#4CAF50", fg="white", 
-                                 font=("Arial", 10, "bold"), padx=10, command=self.send_bid)
+                                 font=("Arial", 10, "bold"), padx=10, state=self.interaction_state, command=self.send_bid)
         self.btn_bid.grid(row=0, column=2, padx=5)
 
         self.btn_buy_now = tk.Button(self, text="MUA NGAY (BUY NOW)", bg="#FF5722", fg="white", 
-                                     font=("Arial", 11, "bold"), width=30, pady=5, command=self.send_buy_now)
+                                     font=("Arial", 11, "bold"), width=30, pady=5, state=self.interaction_state, command=self.send_buy_now)
         self.btn_buy_now.pack(pady=10)
 
         # Nút rời phòng
@@ -133,11 +134,12 @@ class AuctionRoomFrame(tk.Frame):
             self.lbl_bidder.config(text=f"Người giữ giá: {data.get('bidder', 'Chưa có')}")
             
             if msg_type == 903:
+                # TOAST: Thông báo bắt đầu phiên
                 if self.controller.user_role == 2:
                     self.btn_start.pack_forget()
                     self.btn_add.config(state="disabled")
                     self.btn_delete.config(state="disabled")
-                messagebox.showinfo("Thông báo", data.get("message", "Phiên đấu giá đã bắt đầu!"))
+                self.controller.show_toast("🚀 PHIÊN ĐẤU GIÁ CHÍNH THỨC BẮT ĐẦU!", bg="#4CAF50")
 
             if msg_type == 901:
                 if "item_title" in data:
@@ -196,8 +198,6 @@ class AuctionRoomFrame(tk.Frame):
             status = "[ĐANG ĐẤU]" if idx == 0 else f"[#Kế tiếp {idx}]"
             self.list_queue.insert(tk.END, f"{status} {item['title']} - {item['start_price']:,} VND")
 
-    # --- LOGIC TRÒ CHUYỆN (CHAT) ---
-
     def send_chat(self):
         """Gửi tin nhắn chat (C2S_CHAT = 207)"""
         msg = self.ent_chat.get().strip()
@@ -214,15 +214,13 @@ class AuctionRoomFrame(tk.Frame):
         self.chat_display.see(tk.END)
         self.chat_display.config(state="disabled")
 
-    # --- LOGIC QUẢN LÝ (AUCTIONEER - ROLE 2) ---
-
     def send_start_auction(self):
         if messagebox.askyesno("Xác nhận", "Bắt đầu đấu giá ngay bây giờ?\nSau khi bắt đầu sẽ KHÔNG thể thêm/xóa vật phẩm."):
             self.controller.backend.send_command({"type": 206})
 
     def open_add_item(self):
         if self.is_started:
-            messagebox.showerror("Lỗi", "Không thể thêm vật phẩm khi phiên đã bắt đầu!")
+            self.controller.show_toast("⚠️ Không thể thêm vật phẩm khi phiên đã bắt đầu!", bg="#F44336")
             return
         add_win = tk.Toplevel(self)
         add_win.title("Thêm vật phẩm vào hàng chờ")
@@ -242,22 +240,23 @@ class AuctionRoomFrame(tk.Frame):
                 if not t or p <= 0: raise ValueError
                 self.controller.backend.send_command({"type": 301, "room_id": self.room_id, "title": t, "start_price": p, "buy_now": b})
                 add_win.destroy()
-            except ValueError: messagebox.showerror("Lỗi", "Vui lòng nhập số hợp lệ!")
+            except ValueError:
+                self.controller.show_toast("❌ Dữ liệu nhập không hợp lệ!", bg="#F44336")
         tk.Button(main_f, text="XÁC NHẬN", bg="#4CAF50", fg="white", font=("Arial", 10, "bold"), command=submit).pack(fill="x", pady=20)
 
     def delete_selected_item(self):
         if self.is_started:
-            messagebox.showerror("Lỗi", "Không thể xóa vật phẩm khi phiên đã bắt đầu!")
+            self.controller.show_toast("⚠️ Không thể xóa vật phẩm khi phiên đã bắt đầu!", bg="#F44336")
             return
         idx = self.list_queue.curselection()
-        if not idx: return
+        if not idx:
+            self.controller.show_toast("ℹ️ Vui lòng chọn một vật phẩm!", bg="#2196F3")
+            return
         if idx[0] == 0:
-            messagebox.showwarning("Từ chối", "Không thể xóa vật phẩm đang đấu!")
+            self.controller.show_toast("Từ chối xóa món đang đấu!", bg="#F44336")
             return
         if messagebox.askyesno("Xác nhận", "Xóa vật phẩm này?"):
             self.controller.backend.send_command({"type": 302, "room_id": self.room_id, "item_index": idx[0] + 1})
-
-    # --- ĐIỀU KHIỂN ĐẤU GIÁ (BIDDER - ROLE 1) ---
 
     def send_bid(self):
         if not self.is_started: return
@@ -266,7 +265,8 @@ class AuctionRoomFrame(tk.Frame):
         try:
             self.controller.backend.send_command({"type": 401, "price": int(val)})
             self.ent_bid.delete(0, tk.END)
-        except ValueError: messagebox.showerror("Lỗi", "Nhập số nguyên hợp lệ!")
+        except ValueError:
+            self.controller.show_toast("❌ Vui lòng nhập số tiền hợp lệ!", bg="#F44336")
 
     def send_buy_now(self):
         if not self.is_started: return
