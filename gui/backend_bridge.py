@@ -14,6 +14,9 @@ class AuctionBackend:
         self.callback = None
         self._is_running = False
 
+        # --- MỚI: Tự động tải cấu hình mạng ---
+        self.host, self.port = self._load_config()
+
         # 1. Kiểm tra sự tồn tại của file thực thi C
         if not os.path.exists(self.binary_path):
             print(f"CRITICAL ERROR: Không tìm thấy file thực thi tại '{self.binary_path}'")
@@ -22,25 +25,38 @@ class AuctionBackend:
 
         try:
             # 2. Khởi chạy tiến trình C (clientd)
-            # stdin=PIPE: Để Python gửi JSON sang C
-            # stdout=PIPE: Để Python nhận JSON từ C
-            # stderr=PIPE: Để bắt các lỗi runtime của C (như mất kết nối server)
+            # TRUYỀN THAM SỐ: Chuyền host và port vào argv của chương trình C
             self.process = subprocess.Popen(
-                [self.binary_path],
+                [self.binary_path, self.host, str(self.port)],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=1  # Line buffered để nhận dữ liệu ngay khi C in ra
+                bufsize=1
             )
             self._is_running = True
             
             # 3. Khởi chạy luồng đọc lỗi (stderr) từ C để debug
             threading.Thread(target=self._read_stderr, daemon=True).start()
+            print(f"Hệ thống: Đã khởi chạy Daemon kết nối tới {self.host}:{self.port}")
             
         except Exception as e:
             print(f"LỖI khi khởi chạy Backend Daemon: {e}")
             sys.exit(1)
+
+    def _load_config(self):
+        """Đọc file config.json. Nếu không có, dùng mặc định localhost."""
+        config_path = os.path.join(os.path.dirname(__file__), 'config.json')
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                    return config.get("server_host"), config.get("server_port")
+            except Exception as e:
+                print(f"Cảnh báo: Lỗi đọc file config: {e}")
+        
+        # Mặc định nếu lỗi hoặc không thấy file
+        return "127.0.0.1", 8080
 
     def _read_stderr(self):
         """Đọc và in các lỗi từ phía C ra terminal của Python."""
@@ -48,12 +64,11 @@ class AuctionBackend:
             line = self.process.stderr.readline()
             if not line:
                 break
+            # In các log từ C để dễ dàng debug lỗi kết nối mạng
             print(f"[C-Daemon Log]: {line.strip()}")
 
     def send_command(self, cmd_dict):
-        """
-        Gửi một dictionary Python dưới dạng JSON sang phía C qua stdin.
-        """
+        """Gửi một dictionary Python dưới dạng JSON sang phía C qua stdin."""
         if not self.process or self.process.poll() is not None:
             print("LỖI: Tiến trình Client Daemon đã ngừng hoạt động.")
             return False
@@ -69,40 +84,30 @@ class AuctionBackend:
             return False
 
     def start_listening(self, callback):
-        """
-        Bắt đầu lắng nghe dữ liệu từ stdout của C trong một luồng riêng.
-        """
+        """Bắt đầu lắng nghe dữ liệu từ stdout của C trong một luồng riêng."""
         self.callback = callback
         thread = threading.Thread(target=self._listen, daemon=True)
         thread.start()
 
     def _listen(self):
-        """
-        Vòng lặp đọc dữ liệu JSON từ phía C và đẩy vào hàm callback.
-        """
+        """Vòng lặp đọc dữ liệu JSON từ phía C và đẩy vào hàm callback."""
         while self._is_running and self.process:
             line = self.process.stdout.readline()
             if not line:
-                print("Hệ thống: Luồng đọc kết thúc (Stdout closed).")
                 break
             
             try:
-                # Chuyển chuỗi JSON nhận được từ C thành Dictionary
                 data = json.loads(line.strip())
                 if self.callback:
-                    # Gửi data về cho Main App xử lý
                     self.callback(data)
             except json.JSONDecodeError:
-                # Bỏ qua nếu dòng nhận được không phải là JSON hợp lệ
                 if line.strip():
-                    print(f"Hệ thống: Nhận dữ liệu không phải JSON: {line.strip()}")
+                    print(f"Hệ thống: Dữ liệu nhận được: {line.strip()}")
             except Exception as e:
                 print(f"Lỗi khi xử lý dữ liệu từ C: {e}")
 
     def stop(self):
-        """
-        Dừng tiến trình C một cách an toàn.
-        """
+        """Dừng tiến trình C một cách an toàn."""
         self._is_running = False
         if self.process:
             print("Hệ thống: Đang đóng kết nối Backend...")
