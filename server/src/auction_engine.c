@@ -13,7 +13,8 @@ void check_auctions() {
     time_t now = time(NULL);
     for (int i = 0; i < MAX_ROOMS; i++) {
         RoomState *r = &rooms[i];
-        if (r->is_active && r->end_time > 0) {
+        // CHỈ KIỂM TRA NẾU PHÒNG ĐANG HOẠT ĐỘNG VÀ ĐÃ BẮT ĐẦU PHIÊN ĐẤU GIÁ
+        if (r->is_active && r->is_started && r->end_time > 0) {
             double diff = difftime(r->end_time, now);
             
             // Canh bao 30s
@@ -74,6 +75,7 @@ void check_auctions() {
                     broadcast_queue_update(r->room_id);
                 } else {
                     r->is_active = 0; 
+                    r->is_started = 0; // Reset trạng thái bắt đầu
                     // Cập nhật trạng thái phòng đã đóng vào DB trước khi xóa ID phòng trong RAM
                     db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
                     r->room_id = 0;
@@ -92,6 +94,9 @@ char *handle_bid(int fd, cJSON *json) {
     int price = 0;
     get_json_int(json, "price", &price);
     RoomState *r = &rooms[u->current_room_id - 1];
+
+    // KIỂM TRA NẾU PHIÊN ĐẤU GIÁ CHƯA BẮT ĐẦU
+    if (!r->is_started) return create_error_response(ERR_UNKNOWN, "Phien dau gia chua bat dau!");
 
     if (price < (r->current_price + MIN_BID_STEP)) return create_error_response(ERR_BID_TOO_LOW, "Bid too low");
 
@@ -140,6 +145,10 @@ char *handle_buy_now(int fd, cJSON *json) {
         return create_error_response(ERR_UNKNOWN, "Only Bidders can use Buy Now");
 
     RoomState *r = &rooms[u->current_room_id - 1];
+
+    // KIỂM TRA NẾU PHIÊN ĐẤU GIÁ CHƯA BẮT ĐẦU
+    if (!r->is_started) return create_error_response(ERR_UNKNOWN, "Phien dau gia chua bat dau!");
+
     int bn_price = r->queue[r->current_item_idx].buy_now_price;
 
     // 3. Kiem tra tinh hop le cua Buy Now

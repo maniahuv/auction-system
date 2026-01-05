@@ -45,6 +45,7 @@ int db_init(const char *db_name) {
                                    "bidder_fd INTEGER,"
                                    "end_time INTEGER,"
                                    "is_active INTEGER,"
+                                   "is_started INTEGER," // Cập nhật: Luu trang thai da bat dau dau gia hay chua
                                    "total_items INTEGER);";
 
     // 5. Tao bang ROOM_ITEMS (Luu danh sach vat pham trong hang cho cua phong)
@@ -182,8 +183,8 @@ int db_update_room_state(int room_id, int current_item_idx, int current_price, i
     RoomState *r = &rooms[room_id - 1];
 
     // 1. Cap nhat thong tin co ban cua phong vao active_rooms
-    const char *sql_room = "INSERT OR REPLACE INTO active_rooms (id, owner, current_idx, price, bidder_fd, end_time, is_active, total_items) "
-                           "VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
+    const char *sql_room = "INSERT OR REPLACE INTO active_rooms (id, owner, current_idx, price, bidder_fd, end_time, is_active, is_started, total_items) "
+                           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
     
     if (sqlite3_prepare_v2(db, sql_room, -1, &stmt, 0) != SQLITE_OK) return -1;
     sqlite3_bind_int(stmt, 1, room_id);
@@ -193,7 +194,8 @@ int db_update_room_state(int room_id, int current_item_idx, int current_price, i
     sqlite3_bind_int(stmt, 5, highest_bidder_id);
     sqlite3_bind_int(stmt, 6, (int)end_time);
     sqlite3_bind_int(stmt, 7, r->is_active);
-    sqlite3_bind_int(stmt, 8, r->total_items);
+    sqlite3_bind_int(stmt, 8, r->is_started); // Cập nhật: Luu trang thai da bat dau dau gia
+    sqlite3_bind_int(stmt, 9, r->total_items);
     sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
@@ -223,7 +225,7 @@ int db_load_active_auctions(void *rooms_array) {
     sqlite3_stmt *res_rooms, *res_items;
     
     // Truy van cac phong dang active
-    const char *sql_rooms = "SELECT id, owner, current_idx, price, end_time, is_active, total_items FROM active_rooms WHERE is_active = 1;";
+    const char *sql_rooms = "SELECT id, owner, current_idx, price, end_time, is_active, is_started, total_items FROM active_rooms WHERE is_active = 1;";
     if (sqlite3_prepare_v2(db, sql_rooms, -1, &res_rooms, 0) != SQLITE_OK) return -1;
     
     while (sqlite3_step(res_rooms) == SQLITE_ROW) {
@@ -239,7 +241,8 @@ int db_load_active_auctions(void *rooms_array) {
         r->highest_bidder_id = -1; // Reset FD vi socket fd cu khong con gia tri sau khi server sập
         r->end_time = (time_t)sqlite3_column_int(res_rooms, 4);
         r->is_active = sqlite3_column_int(res_rooms, 5);
-        r->total_items = sqlite3_column_int(res_rooms, 6);
+        r->is_started = sqlite3_column_int(res_rooms, 6); // Cập nhật: Khoi phuc trang thai da bat dau dau gia
+        r->total_items = sqlite3_column_int(res_rooms, 7);
         r->sent_warning = 0;
 
         // Truy van va nap lai hang cho vat pham cua phong
