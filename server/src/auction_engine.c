@@ -57,6 +57,9 @@ void check_auctions() {
                     r->end_time = now + 60; // Reset 60 giay cho vat pham tiep theo
                     r->sent_warning = 0;
 
+                    // CẬP NHẬT TRẠNG THÁI VẬT PHẨM MỚI VÀO DATABASE
+                    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+
                     // PHÁT TIN 902 ĐỂ CLIENT MỞ LẠI NÚT BẤM VÀ CẬP NHẬT THÔNG TIN MÓN MỚI
                     cJSON *next = cJSON_CreateObject();
                     cJSON_AddNumberToObject(next, "type", S2C_NEW_ITEM_PENDING);
@@ -70,7 +73,10 @@ void check_auctions() {
                     extern void broadcast_queue_update(int room_id);
                     broadcast_queue_update(r->room_id);
                 } else {
-                    r->is_active = 0; r->room_id = 0;
+                    r->is_active = 0; 
+                    // Cập nhật trạng thái phòng đã đóng vào DB trước khi xóa ID phòng trong RAM
+                    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+                    r->room_id = 0;
                 }
             }
         }
@@ -98,6 +104,9 @@ char *handle_bid(int fd, cJSON *json) {
         r->end_time = now + 30;
         r->sent_warning = 0;
     }
+
+    // ĐỒNG BỘ GIÁ MỚI VÀ THỜI GIAN VÀO DATABASE NGAY LẬP TỨC
+    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
 
     log_activity(u->username, "Placed a bid");
     cJSON *bc = cJSON_CreateObject();
@@ -141,6 +150,9 @@ char *handle_buy_now(int fd, cJSON *json) {
     r->current_price = bn_price;
     r->highest_bidder_id = fd;
     r->end_time = time(NULL); // Ket thuc phien ngay lap tuc, check_auctions se xu ly tiep theo
+
+    // ĐỒNG BỘ TRẠNG THÁI KẾT THÚC DO MUA NGAY VÀO DATABASE
+    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
     
     log_activity(u->username, "Used Buy Now option");
     return create_ok_response();

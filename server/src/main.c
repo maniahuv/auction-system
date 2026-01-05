@@ -25,6 +25,9 @@ int main() {
       exit(EXIT_FAILURE);
   }
 
+  // KHOI PHUC TRANG THAI PHONG TU DATABASE (CHONG MAT DU LIEU KHI SERVER SAP)
+  db_load_active_auctions(rooms);
+
   // 1. Khoi tao socket
   listen_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (listen_fd == -1) {

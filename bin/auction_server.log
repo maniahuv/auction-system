@@ -323,3 +323,40 @@
 [Fri Jan  2 14:11:02 2026] User: nam        | Action: Used Buy Now option
 [Fri Jan  2 14:11:16 2026] User: nam        | Action: Da roi khoi phong
 [Fri Jan  2 14:11:20 2026] User: linh       | Action: Da roi khoi phong
+[Fri Jan  2 15:05:07 2026] User: duong      | Action: LOGGED IN
+[Sat Jan  3 12:33:01 2026] User: bid1       | Action: LOGGED IN
+[Sat Jan  3 12:33:29 2026] User: bid2       | Action: REGISTERED new account
+[Sat Jan  3 12:33:34 2026] User: bid3       | Action: REGISTERED new account
+[Sat Jan  3 12:33:41 2026] User: bid4       | Action: REGISTERED new account
+[Sat Jan  3 12:33:52 2026] User: auc1       | Action: REGISTERED new account
+[Sat Jan  3 12:34:05 2026] User: admin      | Action: REGISTERED new account
+[Sat Jan  3 12:34:30 2026] User: bid2       | Action: LOGGED IN
+[Sat Jan  3 12:34:35 2026] User: bid3       | Action: LOGGED IN
+[Sat Jan  3 12:34:43 2026] User: auc1       | Action: LOGGED IN
+[Sat Jan  3 12:34:50 2026] User: admin      | Action: LOGGED IN
+[Sat Jan  3 12:35:13 2026] User: auc1       | Action: Da tao phong dau gia moi
+[Sat Jan  3 12:35:38 2026] User: auc1       | Action: Da them vat pham moi vao hang cho
+[Sat Jan  3 12:38:51 2026] User: bid1       | Action: LOGGED IN
+[Sat Jan  3 12:38:56 2026] User: bid2       | Action: LOGGED IN
+[Sat Jan  3 12:39:00 2026] User: auc1       | Action: LOGGED IN
+[Sat Jan  3 12:39:07 2026] User: admin      | Action: LOGGED IN
+[Sat Jan  3 12:39:35 2026] User: auc1       | Action: Da tao phong dau gia moi
+[Sat Jan  3 12:40:14 2026] User: bid1       | Action: Tham gia vao phong
+[Sat Jan  3 12:40:17 2026] User: auc1       | Action: Tham gia vao phong
+[Sat Jan  3 12:40:24 2026] User: bid2       | Action: Tham gia vao phong
+[Sat Jan  3 12:40:35 2026] User: bid1       | Action: Placed a bid
+[Sat Jan  3 12:40:56 2026] User: bid1       | Action: Da roi khoi phong
+[Sat Jan  3 12:41:01 2026] User: bid2       | Action: Da roi khoi phong
+[Sat Jan  3 12:41:08 2026] User: auc1       | Action: Da roi khoi phong
+[Mon Jan  5 13:02:28 2026] User: bid1       | Action: LOGGED IN
+[Mon Jan  5 13:02:34 2026] User: auc1       | Action: LOGGED IN
+[Mon Jan  5 13:03:59 2026] User: auc1       | Action: Da tao phong dau gia moi
+[Mon Jan  5 13:04:12 2026] User: bid1       | Action: Tham gia vao phong
+[Mon Jan  5 13:04:14 2026] User: auc1       | Action: Tham gia vao phong
+[Mon Jan  5 13:04:25 2026] User: auc1       | Action: Da them vat pham moi vao hang cho
+[Mon Jan  5 13:04:31 2026] User: auc1       | Action: Da them vat pham moi vao hang cho
+[Mon Jan  5 13:04:36 2026] User: bid1       | Action: Used Buy Now option
+[Mon Jan  5 13:05:33 2026] User: auc1       | Action: LOGGED IN
+[Mon Jan  5 13:13:29 2026] User: bid1       | Action: LOGGED IN
+[Mon Jan  5 13:13:34 2026] User: bid1       | Action: Tham gia vao phong
+[Mon Jan  5 13:13:37 2026] User: bid1       | Action: Used Buy Now option
