@@ -371,3 +371,53 @@ char *handle_chat(int fd, cJSON *json) {
     cJSON_Delete(chat_notif);
     return NULL; 
 }
+
+// Ham xu ly cap nhat thong tin vat pham trong hang cho
+char *handle_update_item(int fd, cJSON *json) {
+    UserState *u = get_user_by_fd(fd);
+    int rid = 0, idx = 0;
+    get_json_int(json, "room_id", &rid);
+    get_json_int(json, "item_index", &idx); // Chỉ số vật phẩm (1-based từ GUI)
+
+    if (rid <= 0 || rid > MAX_ROOMS || !rooms[rid - 1].is_active)
+        return create_error_response(ERR_ROOM_NOT_FOUND, "Phong khong ton tai!");
+
+    RoomState *r = &rooms[rid - 1];
+
+    // 1. Kiểm tra quyền và trạng thái phòng
+    if (r->is_started) 
+        return create_error_response(ERR_UNKNOWN, "Khong the sua vat pham khi phien da bat dau!");
+    
+    if (u->role != ROLE_ADMIN && strcmp(r->owner_username, u->username) != 0)
+        return create_error_response(ERR_UNKNOWN, "Ban khong phai chu phong!");
+
+    int real_idx = idx - 1;
+    if (real_idx < 0 || real_idx >= r->total_items)
+        return create_error_response(ERR_UNKNOWN, "Vat pham khong hop le!");
+
+    // 2. Lấy thông tin mới từ JSON
+    const char *new_title = get_json_string(json, "title");
+    int new_sp = -1, new_bn = -1;
+    get_json_int(json, "start_price", &new_sp);
+    get_json_int(json, "buy_now", &new_bn);
+
+    // 3. Cập nhật vào RAM
+    if (new_title) strncpy(r->queue[real_idx].title, new_title, 99);
+    if (new_sp > 0) r->queue[real_idx].start_price = new_sp;
+    if (new_bn >= 0) r->queue[real_idx].buy_now_price = new_bn;
+
+    // Nếu sửa đúng món đang chuẩn bị đấu (current_idx), cập nhật luôn giá hiện tại
+    if (real_idx == r->current_item_idx) {
+        r->current_price = r->queue[real_idx].start_price;
+    }
+
+    // 4. Đồng bộ vào Database
+    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+
+    log_activity(u->username, "Da cap nhat vat pham trong hang cho");
+
+    // 5. Thông báo cập nhật cho cả phòng để GUI làm mới danh sách
+    broadcast_queue_update(r->room_id);
+    
+    return create_ok_response();
+}

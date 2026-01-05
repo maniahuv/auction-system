@@ -9,7 +9,8 @@ typedef enum {
 	// 1.Xac thuc
     C2S_REGISTER = 101,	// (Auctioneer, bidder)
     C2S_LOGIN = 102,	// (Admin, bidder, auctioneer)
-    
+    C2S_LOGOUT = 103,
+
     // 2.Phong dau gia 
     C2S_LIST_ROOMS = 201,	// (Bidder)
     C2S_CREATE_ROOM = 202,	// (Auctioneer)
@@ -24,6 +25,7 @@ typedef enum {
     C2S_DELETE_ITEM = 302,
     // Liet ke vat pham dau gia 
     C2S_LIST_MY_ITEMS = 303,// (Auctioneer)
+    C2S_UPDATE_ITEM = 304,
     
     // 4.Nguoi mua dau gia 
     C2S_BID = 401,		// (Bidder)

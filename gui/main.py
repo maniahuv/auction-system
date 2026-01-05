@@ -16,6 +16,7 @@ class AuctionApp:
         
         # Trạng thái ứng dụng
         self.user_role = 0  # 1: Bidder, 2: Auctioneer
+        self.current_room_name = ""  # Lưu tên phòng hiện tại để hiển thị trong AuctionRoomFrame
         self.current_frame = None
 
         # 1. Khởi tạo Backend Bridge
@@ -63,6 +64,7 @@ class AuctionApp:
     # --- CHUYỂN ĐỔI MÀN HÌNH (SCREENS) ---
 
     def show_login_screen(self):
+        """Hiển thị màn hình đăng nhập."""
         self.clear_frame()
         self.current_frame = tk.Frame(self.container)
         self.current_frame.pack(expand=True)
@@ -115,6 +117,7 @@ class AuctionApp:
         self.current_frame = self.dashboard_frame
 
     def show_auction_room(self, room_id):
+        """Chuyển sang màn hình phòng đấu giá và khởi tạo thông tin phòng."""
         self.clear_frame()
         self.room_frame = AuctionRoomFrame(self.container, self)
         self.room_frame.set_room_info(room_id)
@@ -151,7 +154,7 @@ class AuctionApp:
     # --- XỬ LÝ PROTOCOL ---
 
     def handle_server_response(self, data):
-        """Bộ điều phối chính xử lý phản hồi từ Server (Đã sửa lỗi update_timer)"""
+        """Bộ điều phối chính xử lý phản hồi từ Server."""
         msg_type = data.get("type")
         
         if msg_type == 802: # Login Success
@@ -180,50 +183,51 @@ class AuctionApp:
             if hasattr(self, 'dashboard_frame'): 
                 self.dashboard_frame.update_room_list(data.get("rooms", []))
 
-        elif msg_type == 811: 
+        elif msg_type == 811: # Search Results
             self.show_search_results(data.get("results", []))
 
-        elif msg_type == 812: # Lịch sử
+        elif msg_type == 812: # History
             history = data.get("history", [])
             h_str = "\n".join([f"• {h['item']}: {h['price']:,} VND" for h in history])
             messagebox.showinfo("Lịch sử", h_str if h_str else "Trống")
 
-        # --- NHÓM 9xx: Điều khiển Phòng Đấu giá (Đồng bộ thời gian chuẩn) ---
+        # --- NHÓM 9xx: Điều khiển Phòng Đấu giá ---
 
         elif msg_type == 901: # Vào phòng thành công
             self.show_auction_room(data.get("room_id"))
-            self.room_frame.update_auction_state(data)
-
-        elif msg_type == 903: # Bắt đầu phiên
             if hasattr(self, 'room_frame'):
                 self.room_frame.update_auction_state(data)
 
-        elif msg_type == 904: # Có giá thầu mới (Reset thời gian nếu Server gửi kèm)
+        elif msg_type == 903: # Bắt đầu phiên (S2C_AUCTION_STARTED)
+            if hasattr(self, 'room_frame'):
+                self.room_frame.update_auction_state(data)
+
+        elif msg_type == 904: # Có giá thầu mới
             if hasattr(self, 'room_frame'):
                 self.room_frame.update_auction_state(data)
                 if "time_left" in data:
                     self.room_frame.sync_timer(data.get("time_left"))
 
-        elif msg_type == 905: # Cảnh báo thời gian từ Server (SỬA LỖI TẠI ĐÂY)
+        elif msg_type == 905: # Cảnh báo thời gian từ Server
             if hasattr(self, 'room_frame'):
                 self.room_frame.sync_timer(data.get("time_left"))
 
-        elif msg_type == 902: # Vật phẩm mới
+        elif msg_type == 902: # Vật phẩm mới (S2C_NEW_ITEM_PENDING)
             if hasattr(self, 'room_frame'):
                 self.room_frame.update_auction_state(data)
 
-        elif msg_type == 906: # Kết thúc vật phẩm
+        elif msg_type == 906: # Kết thúc phiên đấu giá vật phẩm
             if hasattr(self, 'room_frame'):
                 self.room_frame.update_auction_state(data)
                 winner = data.get("winner", "Không có")
                 price = data.get("final_price", 0)
                 self.show_toast(f"🏆 {winner} thắng ({price:,} VND)", duration=5000, bg="#B71C1C")
 
-        elif msg_type == 907: # Cập nhật hàng chờ
+        elif msg_type == 907: # Cập nhật hàng chờ (S2C_QUEUE_UPDATE)
             if hasattr(self, 'room_frame'):
                 self.room_frame.update_queue_list(data.get("queue"))
 
-        elif msg_type == 908: # Chat
+        elif msg_type == 908: # Chat trực tuyến
             if hasattr(self, 'room_frame'):
                 self.room_frame.display_chat_message(data.get("username"), data.get("message"))
 

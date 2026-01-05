@@ -47,3 +47,20 @@ char *handle_login(int fd, cJSON *json) {
     }
     return create_error_response(ERR_WRONG_PASSWORD, "Invalid username or password");
 }
+
+// Ham xu ly yeu cau dang xuat
+char *handle_logout(int fd) {
+    UserState *u = get_user_by_fd(fd);
+    if (u && u->is_logged_in) {
+        log_activity(u->username, "LOGGED OUT");
+        
+        // Reset trạng thái người dùng về mặc định
+        memset(u->username, 0, sizeof(u->username));
+        u->is_logged_in = 0;
+        u->current_room_id = -1;
+        u->role = 0;
+        
+        return create_ok_response(); // Trả về mã 800 để Client biết là OK
+    }
+    return create_error_response(ERR_UNKNOWN, "User not logged in");
+}

@@ -11,7 +11,7 @@ class AuctionRoomFrame(tk.Frame):
         self.timer_job = None  # Quản lý vòng lặp đếm ngược
 
         # --- Bố cục giao diện ---
-        self.lbl_room = tk.Label(self, text="PHÒNG ĐẤU GIÁ #", font=("Arial", 18, "bold"), fg="#2196F3")
+        self.lbl_room = tk.Label(self, text="PHÒNG ĐẤU GIÁ", font=("Arial", 18, "bold"), fg="#2196F3")
         self.lbl_room.pack(pady=15)
 
         # Khung thông tin vật phẩm đang đấu giá
@@ -23,6 +23,10 @@ class AuctionRoomFrame(tk.Frame):
 
         self.lbl_current_price = tk.Label(self.info_frame, text="Giá hiện tại: 0 VND", font=("Arial", 16, "bold"), fg="#D32F2F")
         self.lbl_current_price.pack(anchor="w", pady=5)
+
+        # BỔ SUNG: Hiển thị giá Mua ngay
+        self.lbl_buy_now_price = tk.Label(self.info_frame, text="Giá mua ngay: ---", font=("Arial", 11, "bold"), fg="#FF5722")
+        self.lbl_buy_now_price.pack(anchor="w", pady=2)
 
         self.lbl_bidder = tk.Label(self.info_frame, text="Người đang giữ giá: ---", font=("Arial", 11, "italic"), fg="#555")
         self.lbl_bidder.pack(anchor="w", pady=2)
@@ -51,21 +55,25 @@ class AuctionRoomFrame(tk.Frame):
             
             self.btn_start = tk.Button(self.mgr_btn_frame, text="▶ BẮT ĐẦU", bg="#4CAF50", fg="white", 
                                       font=("Arial", 9, "bold"), width=12, command=self.send_start_auction)
-            self.btn_start.pack(pady=5)
+            self.btn_start.pack(pady=2)
 
             self.btn_add = tk.Button(self.mgr_btn_frame, text="➕ Thêm món", bg="#E3F2FD", font=("Arial", 9, "bold"), width=12,
                                     command=self.open_add_item)
-            self.btn_add.pack(pady=5)
+            self.btn_add.pack(pady=2)
+
+            self.btn_update = tk.Button(self.mgr_btn_frame, text="✏️ Sửa món", bg="#FFF9C4", font=("Arial", 9, "bold"), width=12,
+                                       command=self.open_update_item)
+            self.btn_update.pack(pady=2)
 
             self.btn_delete = tk.Button(self.mgr_btn_frame, text="❌ Xóa chọn", bg="#FFEBEE", fg="red", font=("Arial", 9, "bold"), width=12,
                                        command=self.delete_selected_item)
-            self.btn_delete.pack(pady=5)
+            self.btn_delete.pack(pady=2)
 
         # --- Khung Trò chuyện (Chat) ---
         self.chat_frame = tk.LabelFrame(self, text=" Trò chuyện trực tuyến ", padx=10, pady=5, font=("Arial", 10, "bold"))
         self.chat_frame.pack(fill="both", expand=True, padx=30, pady=5)
 
-        self.chat_display = tk.Text(self.chat_frame, height=6, state="disabled", font=("Arial", 10))
+        self.chat_display = tk.Text(self.chat_frame, height=5, state="disabled", font=("Arial", 10))
         self.chat_display.pack(side="top", fill="both", expand=True)
         
         c_scroll = tk.Scrollbar(self.chat_display, orient="vertical", command=self.chat_display.yview)
@@ -97,19 +105,15 @@ class AuctionRoomFrame(tk.Frame):
 
         self.btn_buy_now = tk.Button(self, text="MUA NGAY (BUY NOW)", bg="#FF5722", fg="white", 
                                      font=("Arial", 11, "bold"), width=30, pady=5, command=self.send_buy_now)
-        self.btn_buy_now.pack(pady=10)
+        self.btn_buy_now.pack(pady=5)
 
         # Nút rời phòng
-        self.footer_frame = tk.Frame(self)
-        self.footer_frame.pack(side="bottom", fill="x", pady=15)
-        tk.Button(self.footer_frame, text="⬅ Rời khỏi phòng", font=("Arial", 10), command=self.leave_room).pack()
+        tk.Button(self, text="⬅ Rời khỏi phòng", font=("Arial", 10), command=self.leave_room).pack(side="bottom", pady=10)
 
     # --- LOGIC THỜI GIAN (TIMER) ---
 
     def tick(self):
-        """Vòng lặp đếm ngược chạy tại máy khách (Client-side)"""
-        if not self.is_started:
-            return
+        if not self.is_started: return
 
         if self.time_left > 0:
             self.time_left -= 1
@@ -133,26 +137,21 @@ class AuctionRoomFrame(tk.Frame):
             self.timer_container.config(bg="black")
 
     def sync_timer(self, server_time):
-        """Đồng bộ hóa thời gian từ Server và khởi động lại vòng lặp tick"""
-        if self.timer_job:
-            self.after_cancel(self.timer_job)
-        
+        if self.timer_job: self.after_cancel(self.timer_job)
         self.time_left = server_time
         self.refresh_timer_ui()
-        
-        if self.is_started and self.time_left > 0:
-            self.tick()
+        if self.is_started and self.time_left > 0: self.tick()
 
     # --- ĐIỀU PHỐI TRẠNG THÁI ---
 
     def set_room_info(self, room_id):
         self.room_id = room_id
-        self.lbl_room.config(text=f"PHÒNG ĐẤU GIÁ #{room_id}")
+        room_name = getattr(self.controller, 'current_room_name', f"PHÒNG ĐẤU GIÁ #{room_id}")
+        self.lbl_room.config(text=room_name)
         self.is_started = False
         self.reset_ui_state()
 
     def reset_ui_state(self):
-        """Cập nhật khả năng tương tác của nút dựa trên vai trò và trạng thái phòng"""
         is_bidder = (self.controller.user_role == 1)
         state = "normal" if (is_bidder and self.is_started) else "disabled"
         
@@ -160,91 +159,91 @@ class AuctionRoomFrame(tk.Frame):
         self.btn_buy_now.config(state=state, bg="#FF5722" if state == "normal" else "#ccc")
         self.ent_bid.config(state=state)
 
+        if self.controller.user_role == 2:
+            mgr_state = "disabled" if self.is_started else "normal"
+            self.btn_add.config(state=mgr_state)
+            self.btn_delete.config(state=mgr_state)
+            self.btn_update.config(state=mgr_state)
+            if self.is_started: self.btn_start.pack_forget()
+
         if not self.is_started:
             self.lbl_timer.config(text="CHỜ BẮT ĐẦU", bg="black", fg="yellow")
             self.timer_container.config(bg="black")
 
     def update_auction_state(self, data):
-        """Xử lý các mã phản hồi từ Server (901, 903, 904, 906, 902, 907, 905)"""
         msg_type = data.get("type")
-        
-        if "is_started" in data:
-            self.is_started = bool(data.get("is_started"))
+        if "is_started" in data: self.is_started = bool(data.get("is_started"))
 
-        if msg_type in [901, 903, 904]:
-            # CẬP NHẬT GIÁ: Đảm bảo hiển thị giá khởi điểm hoặc giá hiện tại ngay lập tức
-            curr_price = data.get('current_price', 0)
-            self.lbl_current_price.config(text=f"Giá hiện tại: {curr_price:,} VND")
+        if msg_type in [901, 902, 903, 904]:
+            self.lbl_current_price.config(text=f"Giá hiện tại: {data.get('current_price', 0):,} VND")
             self.lbl_bidder.config(text=f"Người giữ giá: {data.get('bidder', 'Chưa có')}")
             
-            if msg_type == 903: # Auction Started
+            # CẬP NHẬT GIÁ MUA NGAY
+            if "buy_now" in data:
+                bn = data.get("buy_now", 0)
+                self.lbl_buy_now_price.config(text=f"Giá mua ngay: {bn:,} VND" if bn > 0 else "Giá mua ngay: Không hỗ trợ")
+
+            if msg_type == 903:
                 self.is_started = True
-                if self.controller.user_role == 2:
-                    self.btn_start.pack_forget()
-                    self.btn_add.config(state="disabled")
-                    self.btn_delete.config(state="disabled")
                 self.controller.show_toast("🚀 PHIÊN ĐẤU GIÁ CHÍNH THỨC BẮT ĐẦU!", bg="#4CAF50")
 
-            if msg_type == 901: # Join Room
-                if "item_title" in data:
-                    self.lbl_item_name.config(text=f"Vật phẩm: {data.get('item_title')}")
-                if "queue" in data:
-                    self.update_queue_list(data.get("queue"))
-                if self.is_started and self.controller.user_role == 2:
-                    if hasattr(self, 'btn_start'): self.btn_start.pack_forget()
-                    self.btn_add.config(state="disabled")
-                    self.btn_delete.config(state="disabled")
+            if msg_type == 901:
+                if "item_title" in data: self.lbl_item_name.config(text=f"Vật phẩm: {data.get('item_title')}")
+                if "queue" in data: self.update_queue_list(data.get("queue"))
 
-            if "time_left" in data:
-                self.sync_timer(data.get("time_left"))
+            if msg_type == 902: # Vật phẩm mới
+                self.lbl_item_name.config(text=f"Vật phẩm: {data.get('title', '---')}")
+                self.lbl_bidder.config(text="Người giữ giá: Chưa có")
+                self.ent_bid.delete(0, tk.END)
+
+            if "time_left" in data: self.sync_timer(data.get("time_left"))
             self.reset_ui_state()
             
-        elif msg_type == 906: # Item Finished
+        elif msg_type == 906:
             if self.timer_job: self.after_cancel(self.timer_job)
             self.lbl_timer.config(text="PHIÊN KẾT THÚC", fg="white", bg="#B71C1C")
-            self.timer_container.config(bg="#B71C1C")
-            self.btn_bid.config(state="disabled", bg="#ccc")
-            self.btn_buy_now.config(state="disabled", bg="#ccc")
-            self.ent_bid.config(state="disabled")
-            
-            # LÀM SẠCH: Xóa thông tin người giữ giá khi món đồ đã kết thúc
             self.lbl_bidder.config(text="Người giữ giá: ---")
-            
-        elif msg_type == 902: # New Item Transition
-            self.is_started = True 
-            self.lbl_item_name.config(text=f"Vật phẩm: {data.get('title', '---')}")
-            self.lbl_current_price.config(text=f"Giá hiện tại: {data.get('start_price', 0):,} VND")
-            self.lbl_bidder.config(text="Người giữ giá: Chưa có")
-            self.ent_bid.delete(0, tk.END)
-            if "time_left" in data:
-                self.sync_timer(data.get("time_left"))
             self.reset_ui_state()
 
-        elif msg_type == 907: # Queue List Update
+        elif msg_type == 907:
             if "queue" in data: self.update_queue_list(data.get("queue"))
 
-        elif msg_type == 905: # Periodic Sync
-            if "time_left" in data:
-                self.sync_timer(data.get("time_left"))
-
     def update_queue_list(self, queue_data):
-        """Cập nhật Listbox hiển thị hàng chờ, xử lý trường hợp hàng chờ rỗng"""
         self.list_queue.delete(0, tk.END)
-        
-        if not queue_data or len(queue_data) == 0:
+        if not queue_data:
             self.list_queue.insert(tk.END, " (Hàng chờ hiện đang trống) ")
-            # Nếu toàn bộ phiên kết thúc, hiển thị trạng thái hoàn tất
-            if not self.is_started:
-                 self.lbl_item_name.config(text="Vật phẩm: (Hoàn tất đấu giá)")
             return
             
         for idx, item in enumerate(queue_data):
-            title = item.get('title', 'N/A')
-            price = item.get('start_price', 0)
             status = "🔥 [ĐANG ĐẤU]" if idx == 0 else f"⏳ [#Kế tiếp {idx}]"
-            self.list_queue.insert(tk.END, f"{status} {title} - {price:,} VND")
+            # HIỂN THỊ THÊM GIÁ MUA NGAY TRONG HÀNG CHỜ (NẾU CÓ)
+            bn = item.get('buy_now', 0)
+            bn_str = f" | ⚡BN: {bn:,}" if bn > 0 else ""
+            self.list_queue.insert(tk.END, f"{status} {item.get('title')} - {item.get('start_price', 0):,} VND{bn_str}")
 
-    # --- HÀNH ĐỘNG & CHAT ---
+    # --- HÀNH ĐỘNG QUẢN LÝ ---
+
+    def open_update_item(self):
+        if self.is_started:
+            self.controller.show_toast("⚠️ Không thể sửa khi phiên đang chạy!", bg="#F44336")
+            return
+        idx = self.list_queue.curselection()
+        if not idx:
+            self.controller.show_toast("ℹ️ Vui lòng chọn vật phẩm để sửa!", bg="#2196F3")
+            return
+        upd_win = tk.Toplevel(self); upd_win.title("Cập nhật vật phẩm"); upd_win.geometry("350x300"); upd_win.grab_set()
+        tk.Label(upd_win, text="Tên vật phẩm mới:").pack(pady=5); ent_t = tk.Entry(upd_win); ent_t.pack()
+        tk.Label(upd_win, text="Giá khởi điểm mới:").pack(pady=5); ent_p = tk.Entry(upd_win); ent_p.pack()
+        tk.Label(upd_win, text="Giá mua ngay mới:").pack(pady=5); ent_b = tk.Entry(upd_win); ent_b.pack()
+        def do_update():
+            try:
+                self.controller.backend.send_command({
+                    "type": 304, "room_id": self.room_id, "item_index": idx[0] + 1, 
+                    "title": ent_t.get(), "start_price": int(ent_p.get()), "buy_now": int(ent_b.get())
+                })
+                upd_win.destroy()
+            except: self.controller.show_toast("❌ Dữ liệu không hợp lệ!", bg="#F44336")
+        tk.Button(upd_win, text="CẬP NHẬT", command=do_update, bg="#4CAF50", fg="white").pack(pady=10)
 
     def send_chat(self):
         msg = self.ent_chat.get().strip()
@@ -257,17 +256,14 @@ class AuctionRoomFrame(tk.Frame):
         self.chat_display.insert(tk.END, f"{username}: ", "username")
         self.chat_display.insert(tk.END, f"{message}\n")
         self.chat_display.tag_config("username", foreground="#1976D2", font=("Arial", 10, "bold"))
-        self.chat_display.see(tk.END)
-        self.chat_display.config(state="disabled")
+        self.chat_display.see(tk.END); self.chat_display.config(state="disabled")
 
     def send_start_auction(self):
         if messagebox.askyesno("Xác nhận", "Bắt đầu đấu giá vật phẩm này ngay bây giờ?"):
             self.controller.backend.send_command({"type": 206})
 
     def open_add_item(self):
-        if self.is_started:
-            self.controller.show_toast("⚠️ Không thể thêm món mới khi phiên đang chạy!", bg="#F44336")
-            return
+        if self.is_started: return
         add_win = tk.Toplevel(self); add_win.title("Thêm vật phẩm"); add_win.geometry("350x300"); add_win.grab_set()
         tk.Label(add_win, text="Tên vật phẩm:").pack(pady=5); ent_t = tk.Entry(add_win); ent_t.pack()
         tk.Label(add_win, text="Giá khởi điểm:").pack(pady=5); ent_p = tk.Entry(add_win); ent_p.pack()
@@ -279,33 +275,28 @@ class AuctionRoomFrame(tk.Frame):
                     "title": ent_t.get(), "start_price": int(ent_p.get()), "buy_now": int(ent_b.get())
                 })
                 add_win.destroy()
-            except: self.controller.show_toast("❌ Dữ liệu không hợp lệ!", bg="#F44336")
+            except: self.controller.show_toast("❌ Lỗi dữ liệu!", bg="#F44336")
         tk.Button(add_win, text="XÁC NHẬN", command=sub, bg="#4CAF50", fg="white").pack(pady=10)
 
     def delete_selected_item(self):
-        if self.is_started:
-            self.controller.show_toast("⚠️ Không thể xóa vật phẩm khi đang đấu giá!", bg="#F44336")
-            return
+        if self.is_started: return
         idx = self.list_queue.curselection()
         if idx and idx[0] != 0:
             if messagebox.askyesno("Xác nhận", "Xóa vật phẩm này khỏi danh sách?"):
                 self.controller.backend.send_command({"type": 302, "room_id": self.room_id, "item_index": idx[0] + 1})
-        else:
-            self.controller.show_toast("ℹ️ Vui lòng chọn vật phẩm kế tiếp để xóa!", bg="#2196F3")
 
     def send_bid(self):
-        if not self.is_started: return
         val = self.ent_bid.get().strip()
         try:
             self.controller.backend.send_command({"type": 401, "price": int(val)})
             self.ent_bid.delete(0, tk.END)
-        except: self.controller.show_toast("❌ Vui lòng nhập số tiền hợp lệ!", bg="#F44336")
+        except: self.controller.show_toast("❌ Giá không hợp lệ!", bg="#F44336")
 
     def send_buy_now(self):
-        if self.is_started and messagebox.askyesno("Mua ngay", "Bạn chắc chắn muốn mua vật phẩm này với giá 'Mua ngay'?"):
+        if self.is_started and messagebox.askyesno("Mua ngay", "Bạn chắc chắn muốn mua ngay vật phẩm này?"):
             self.controller.backend.send_command({"type": 402})
 
     def leave_room(self):
-        if messagebox.askyesno("Thoát", "Bạn muốn rời khỏi phòng đấu giá?"):
+        if messagebox.askyesno("Thoát", "Rời khỏi phòng đấu giá?"):
             if self.timer_job: self.after_cancel(self.timer_job)
             self.controller.backend.send_command({"type": 204})

@@ -117,3 +117,22 @@ class AuctionBackend:
             except subprocess.TimeoutExpired:
                 self.process.kill()
             print("Hệ thống: Đã dừng Backend Daemon.")
+            
+    # Thêm vào class BackendBridge trong gui/backend_bridge.py
+
+    def logout(self):
+        """Gửi yêu cầu đăng xuất (Mã 103)"""
+        payload = {"type": 103}
+        return self.send_command(payload)
+
+    def update_item(self, room_id, item_index, title, start_price, buy_now):
+        """Gửi yêu cầu cập nhật vật phẩm (Mã 304)"""
+        payload = {
+            "type": 304,
+            "room_id": room_id,
+            "item_index": item_index,
+            "title": title,
+            "start_price": int(start_price),
+            "buy_now": int(buy_now)
+        }
+        return self.send_command(payload)
