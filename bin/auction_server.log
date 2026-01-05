@@ -405,3 +405,18 @@
 [Mon Jan  5 21:12:36 2026] User: auc1       | Action: Tham gia vao phong
 [Mon Jan  5 21:13:28 2026] User: auc1       | Action: Da bat dau phien dau gia
 [Mon Jan  5 21:13:37 2026] User: bid1       | Action: Used Buy Now option
+[Mon Jan  5 21:18:34 2026] User: bid1       | Action: LOGGED IN
+[Mon Jan  5 21:18:41 2026] User: auc1       | Action: LOGGED IN
+[Mon Jan  5 21:18:50 2026] User: auc1       | Action: Da tao phong dau gia moi
+[Mon Jan  5 21:18:57 2026] User: auc1       | Action: Tham gia vao phong
+[Mon Jan  5 21:20:48 2026] User: auc1       | Action: LOGGED IN
+[Mon Jan  5 21:20:53 2026] User: auc1       | Action: Tham gia vao phong
+[Mon Jan  5 21:21:14 2026] User: bid1       | Action: LOGGED IN
+[Mon Jan  5 21:21:25 2026] User: bid1       | Action: Tham gia vao phong
+[Mon Jan  5 21:22:07 2026] User: auc1       | Action: Da them vat pham moi vao hang cho
+[Mon Jan  5 21:22:17 2026] User: auc1       | Action: Da bat dau phien dau gia
+[Mon Jan  5 21:22:29 2026] User: bid1       | Action: Used Buy Now option
+[Mon Jan  5 21:22:43 2026] User: auc1       | Action: Da roi khoi phong
+[Mon Jan  5 21:22:46 2026] User: auc1       | Action: Tham gia vao phong
+[Mon Jan  5 21:23:03 2026] User: bid1       | Action: Da roi khoi phong
+[Mon Jan  5 21:23:06 2026] User: bid1       | Action: Tham gia vao phong
