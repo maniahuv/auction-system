@@ -19,4 +19,5 @@ char *handle_get_history(int fd);
 char *handle_start_auction(int fd);
 
 char *handle_chat(int fd, cJSON *json);
+char *handle_update_item(int fd, cJSON *json);
 #endif 

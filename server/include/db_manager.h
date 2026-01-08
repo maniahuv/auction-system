@@ -27,7 +27,9 @@ int db_update_room_state(int room_id, int current_item_idx, int current_price, i
 
 // Khoi phuc trang thai cac phong tu Database khi Server khoi dong lai
 int db_load_active_auctions(void *rooms_array);
-
+char* db_get_all_users_json();
+int db_delete_user_by_id(int user_id);
+int db_update_user_role(int user_id, int new_role);
 
 void db_close();
 

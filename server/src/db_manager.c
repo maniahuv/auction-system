@@ -20,7 +20,7 @@ int db_init(const char *db_name) {
                             "password TEXT,"
                             "role INTEGER);";
     
-    // 2. Tao bang HISTORY
+    // 2. Tao bang HISTORY (Luu lich su dau gia kem nguoi ban)
     const char *sql_history = "CREATE TABLE IF NOT EXISTS history ("
                               "id INTEGER PRIMARY KEY AUTOINCREMENT,"
                               "winner TEXT,"
@@ -45,7 +45,7 @@ int db_init(const char *db_name) {
                                    "bidder_fd INTEGER,"
                                    "end_time INTEGER,"
                                    "is_active INTEGER,"
-                                   "is_started INTEGER," // Cập nhật: Luu trang thai da bat dau dau gia hay chua
+                                   "is_started INTEGER," 
                                    "total_items INTEGER);";
 
     // 5. Tao bang ROOM_ITEMS (Luu danh sach vat pham trong hang cho cua phong)
@@ -135,23 +135,22 @@ void db_log_activity(const char *username, const char *action) {
     sqlite3_finalize(stmt);
 }
 
-// Lay lich su dau gia
+// --- NÂNG CẤP: Lay lich su dau gia day du thong tin (Winner, Item, Price, Time, Owner) ---
 char* db_get_history_json(const char *username, int role) {
     sqlite3_stmt *res;
     const char *sql;
 
     // Phan quyen truy van dua tren role
     if (role == ROLE_ADMIN) {
-        sql = "SELECT winner, item, price, timestamp FROM history ORDER BY timestamp DESC;";
+        sql = "SELECT winner, item, price, timestamp, owner FROM history ORDER BY timestamp DESC;";
     } else if (role == ROLE_AUCTIONEER) {
-        sql = "SELECT winner, item, price, timestamp FROM history WHERE owner = ? ORDER BY timestamp DESC;";
+        sql = "SELECT winner, item, price, timestamp, owner FROM history WHERE owner = ? ORDER BY timestamp DESC;";
     } else {
-        sql = "SELECT winner, item, price, timestamp FROM history WHERE winner = ? ORDER BY timestamp DESC;";
+        sql = "SELECT winner, item, price, timestamp, owner FROM history WHERE winner = ? ORDER BY timestamp DESC;";
     }
 
     if (sqlite3_prepare_v2(db, sql, -1, &res, 0) != SQLITE_OK) return NULL;
     
-    // bind username neu khong phai admin
     if (role != ROLE_ADMIN) {
         sqlite3_bind_text(res, 1, username, -1, SQLITE_STATIC);
     }
@@ -166,6 +165,9 @@ char* db_get_history_json(const char *username, int role) {
         cJSON_AddStringToObject(obj, "item", (const char*)sqlite3_column_text(res, 1));
         cJSON_AddNumberToObject(obj, "price", sqlite3_column_int(res, 2));
         cJSON_AddNumberToObject(obj, "time", sqlite3_column_int(res, 3));
+        // MỚI: Đóng gói thêm tên người bán (owner) vào JSON để hiển thị cho Bidder
+        const char *owner_val = (const char*)sqlite3_column_text(res, 4);
+        cJSON_AddStringToObject(obj, "owner", owner_val ? owner_val : "---");
         cJSON_AddItemToArray(arr, obj);
     }
 
@@ -176,7 +178,7 @@ char* db_get_history_json(const char *username, int role) {
     return out;
 }
 
-// --- CẬP NHẬT MỚI: QUẢN LÝ TRẠNG THÁI PHÒNG ĐỂ CHỐNG MẤT DỮ LIỆU KHI SERVER SẬP ---
+// --- QUẢN LÝ TRẠNG THÁI PHÒNG ĐỂ CHỐNG MẤT DỮ LIỆU KHI SERVER SẬP ---
 
 int db_update_room_state(int room_id, int current_item_idx, int current_price, int highest_bidder_id, long end_time) {
     sqlite3_stmt *stmt;
@@ -194,7 +196,7 @@ int db_update_room_state(int room_id, int current_item_idx, int current_price, i
     sqlite3_bind_int(stmt, 5, highest_bidder_id);
     sqlite3_bind_int(stmt, 6, (int)end_time);
     sqlite3_bind_int(stmt, 7, r->is_active);
-    sqlite3_bind_int(stmt, 8, r->is_started); // Cập nhật: Luu trang thai da bat dau dau gia
+    sqlite3_bind_int(stmt, 8, r->is_started); 
     sqlite3_bind_int(stmt, 9, r->total_items);
     sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -241,7 +243,7 @@ int db_load_active_auctions(void *rooms_array) {
         r->highest_bidder_id = -1; // Reset FD vi socket fd cu khong con gia tri sau khi server sập
         r->end_time = (time_t)sqlite3_column_int(res_rooms, 4);
         r->is_active = sqlite3_column_int(res_rooms, 5);
-        r->is_started = sqlite3_column_int(res_rooms, 6); // Cập nhật: Khoi phuc trang thai da bat dau dau gia
+        r->is_started = sqlite3_column_int(res_rooms, 6); 
         r->total_items = sqlite3_column_int(res_rooms, 7);
         r->sent_warning = 0;
 
@@ -261,6 +263,56 @@ int db_load_active_auctions(void *rooms_array) {
     }
     sqlite3_finalize(res_rooms);
     return 0;
+}
+
+// --- QUẢN LÝ ADMIN ---
+
+// Lấy danh sách toàn bộ người dùng dưới dạng JSON
+char* db_get_all_users_json() {
+    sqlite3_stmt *res;
+    const char *sql = "SELECT id, username, role FROM users;";
+    
+    if (sqlite3_prepare_v2(db, sql, -1, &res, 0) != SQLITE_OK) return NULL;
+    
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddNumberToObject(resp, "type", S2C_USER_LIST);
+    cJSON *arr = cJSON_CreateArray();
+
+    while (sqlite3_step(res) == SQLITE_ROW) {
+        cJSON *obj = cJSON_CreateObject();
+        cJSON_AddNumberToObject(obj, "id", sqlite3_column_int(res, 0));
+        cJSON_AddStringToObject(obj, "username", (const char*)sqlite3_column_text(res, 1));
+        cJSON_AddNumberToObject(obj, "role", sqlite3_column_int(res, 2));
+        cJSON_AddItemToArray(arr, obj);
+    }
+    cJSON_AddItemToObject(resp, "users", arr);
+    sqlite3_finalize(res);
+    char *out = cJSON_PrintUnformatted(resp);
+    cJSON_Delete(resp);
+    return out;
+}
+
+// Xóa người dùng theo ID
+int db_delete_user_by_id(int user_id) {
+    sqlite3_stmt *stmt;
+    const char *sql = "DELETE FROM users WHERE id = ?;";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK) return -1;
+    sqlite3_bind_int(stmt, 1, user_id);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE) ? 0 : -1;
+}
+
+// Cập nhật Role cho người dùng
+int db_update_user_role(int user_id, int new_role) {
+    sqlite3_stmt *stmt;
+    const char *sql = "UPDATE users SET role = ? WHERE id = ?;";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK) return -1;
+    sqlite3_bind_int(stmt, 1, new_role);
+    sqlite3_bind_int(stmt, 2, user_id);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE) ? 0 : -1;
 }
 
 // Dong ket noi database
