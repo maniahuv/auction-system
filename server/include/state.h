@@ -14,6 +14,7 @@ typedef struct {
   int role;
   int is_logged_in;
   int current_room_id; // -1 neu chua vao phong
+  time_t last_activity;
 } UserState;
 
 // Cau truc luu thong tin vat pham trong hang gio
