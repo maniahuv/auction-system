@@ -64,13 +64,14 @@ char *handle_create_room(int fd, cJSON *json) {
             rooms[i].total_items = 1;
             rooms[i].current_item_idx = 0;
             rooms[i].current_price = start_price;
-            rooms[i].highest_bidder_id = -1;
+            rooms[i].highest_bidder_username[0] = '\0'; // SỬA: Reset username thay vì ID (-1)
             rooms[i].end_time = 0; // KHOI TAO: Dong ho chua chay
             rooms[i].sent_warning = 0;
             u->current_room_id = rooms[i].room_id;
 
             // ĐỒNG BỘ PHÒNG MỚI TẠO VÀO DATABASE
-            db_update_room_state(rooms[i].room_id, rooms[i].current_item_idx, rooms[i].current_price, rooms[i].highest_bidder_id, (long)rooms[i].end_time);
+            // SỬA: Truyền highest_bidder_username thay vì ID
+            db_update_room_state(rooms[i].room_id, rooms[i].current_item_idx, rooms[i].current_price, rooms[i].highest_bidder_username, (long)rooms[i].end_time);
 
             log_activity(u->username, "Da tao phong dau gia moi");
             cJSON *resp = cJSON_CreateObject();
@@ -102,7 +103,8 @@ char *handle_start_auction(int fd) {
     r->sent_warning = 0;
 
     // Dong bo vao Database
-    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+    // SỬA: Truyền highest_bidder_username thay vì ID
+    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_username, (long)r->end_time);
 
     // Thong bao cho ca phong biet phien da bat dau (Mã 903) để Client mở khóa nút Bid
     cJSON *notif = cJSON_CreateObject();
@@ -276,7 +278,8 @@ char *handle_add_item(int fd, cJSON *json) {
     r->total_items++;
 
     // ĐỒNG BỘ HÀNG CHỜ MỚI VÀO DATABASE
-    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+    // SỬA: Truyền highest_bidder_username thay vì ID
+    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_username, (long)r->end_time);
 
     log_activity(u->username, "Da them vat pham moi vao hang cho");
     broadcast_queue_update(r->room_id);
@@ -307,7 +310,8 @@ char *handle_delete_item(int fd, cJSON *json) {
     r->total_items--;
 
     // ĐỒNG BỘ HÀNG CHỜ SAU KHI XÓA VÀO DATABASE
-    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+    // SỬA: Truyền highest_bidder_username thay vì ID
+    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_username, (long)r->end_time);
 
     log_activity(u->username, "Da xoa vat pham khoi hang cho");
     broadcast_queue_update(r->room_id);
@@ -331,7 +335,7 @@ char *handle_search_item(int fd, cJSON *json) {
                     cJSON_AddStringToObject(res_item, "title", rooms[i].queue[j].title);
                     cJSON_AddNumberToObject(res_item, "start_price", rooms[i].queue[j].start_price);
                     cJSON_AddStringToObject(res_item, "status", (j == rooms[i].current_item_idx) ? "DANG DAU GIA" : (j < rooms[i].current_item_idx ? "Da xong" : "Dang cho"));
-                    cJSON_AddItemToArray(results, res_item);
+                    cJSON_AddItemToArray(results, i == rooms[i].room_id ? res_item : res_item); // Giữ nguyên cấu trúc logic người dùng
                 }
             }
         }
@@ -412,7 +416,8 @@ char *handle_update_item(int fd, cJSON *json) {
     }
 
     // 4. Đồng bộ vào Database
-    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+    // SỬA: Truyền highest_bidder_username thay vì ID
+    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_username, (long)r->end_time);
 
     log_activity(u->username, "Da cap nhat vat pham trong hang cho");
 

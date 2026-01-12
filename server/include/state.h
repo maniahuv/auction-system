@@ -37,7 +37,7 @@ typedef struct {
 
   // Trang thai dau gia hien tai (ap dung cho cac vat pham tai current_item_idx)
   int current_price;
-  int highest_bidder_id; // ID (fd) cua nguoi tra gia cao nhat hien tai
+  char highest_bidder_username[50]; // SỬA: Luu username thay vi Socket FD
   time_t end_time;
   int sent_warning;      // Co bao hieu gui canh bao 30s (0: chua, 1: roi)
 } RoomState;

@@ -1,7 +1,7 @@
 # =========================
 # Compiler & Target
 # =========================
-CC      := clang
+CC      := gcc
 BIN_DIR := ../bin
 TARGET_DAEMON := $(BIN_DIR)/clientd
 TARGET_CLI    := $(BIN_DIR)/auction_cli

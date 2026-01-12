@@ -50,10 +50,9 @@ void check_auctions() {
             // Ket thuc phien cua 1 vat pham
             if (diff <= 0) {
                 char winner[50] = "Khong co";
-                UserState *w = get_user_by_fd(r->highest_bidder_id);
-                if (w) strcpy(winner, w->username);
-
-                if (r->highest_bidder_id != -1) {
+                // SỬA: Kiểm tra người thắng dựa trên username đã lưu trong RoomState thay vì tìm qua FD
+                if (strlen(r->highest_bidder_username) > 0) {
+                    strcpy(winner, r->highest_bidder_username);
                     db_save_auction_result(winner, r->queue[r->current_item_idx].title, r->current_price, r->owner_username);
                 }
 
@@ -72,12 +71,13 @@ void check_auctions() {
                     r->current_item_idx++;
                     // SỬA LỖI: Gán giá hiện tại bằng giá khởi điểm món mới thay vì 0
                     r->current_price = r->queue[r->current_item_idx].start_price;
-                    r->highest_bidder_id = -1;
+                    r->highest_bidder_username[0] = '\0'; // SỬA: Reset username thay vì ID
                     r->end_time = now + 60; 
                     r->sent_warning = 0;
                     r->is_started = 1;
 
-                    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+                    // SỬA: Truyền username vào hàm cập nhật Database
+                    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_username, (long)r->end_time);
 
                     cJSON *next = cJSON_CreateObject();
                     cJSON_AddNumberToObject(next, "type", S2C_NEW_ITEM_PENDING);
@@ -99,7 +99,8 @@ void check_auctions() {
                     // TRƯỜNG HỢP KẾT THÚC VẬT PHẨM CUỐI CÙNG
                     r->is_active = 0; 
                     r->is_started = 0;
-                    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+                    // SỬA: Truyền username vào hàm cập nhật Database
+                    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_username, (long)r->end_time);
                     
                     // Gửi cập nhật hàng chờ rỗng để Client xóa vật phẩm cuối cùng trên UI (Mã 907)
                     cJSON *empty_q = cJSON_CreateObject();
@@ -131,7 +132,7 @@ char *handle_bid(int fd, cJSON *json) {
     if (price < (r->current_price + MIN_BID_STEP)) return create_error_response(ERR_BID_TOO_LOW, "Gia dat phai lon hon gia hien tai it nhat 10k");
 
     r->current_price = price;
-    r->highest_bidder_id = fd;
+    strncpy(r->highest_bidder_username, u->username, 49); // SỬA: Lưu username thay vì FD
 
     time_t now = time(NULL);
     if (difftime(r->end_time, now) < 30.0) {
@@ -139,7 +140,8 @@ char *handle_bid(int fd, cJSON *json) {
         r->sent_warning = 0;
     }
 
-    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+    // SỬA: Truyền username vào hàm cập nhật Database
+    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_username, (long)r->end_time);
 
     log_activity(u->username, "Placed a bid");
     cJSON *bc = cJSON_CreateObject();
@@ -172,10 +174,11 @@ char *handle_buy_now(int fd, cJSON *json) {
     if (bn_price <= 0) return create_error_response(ERR_UNKNOWN, "Buy Now disabled for this item");
 
     r->current_price = bn_price;
-    r->highest_bidder_id = fd;
+    strncpy(r->highest_bidder_username, u->username, 49); // SỬA: Lưu username thay vì FD
     r->end_time = time(NULL); // Kết thúc ngay món hàng
 
-    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_id, (long)r->end_time);
+    // SỬA: Truyền username vào hàm cập nhật Database
+    db_update_room_state(r->room_id, r->current_item_idx, r->current_price, r->highest_bidder_username, (long)r->end_time);
     
     log_activity(u->username, "Used Buy Now option");
     return create_ok_response();

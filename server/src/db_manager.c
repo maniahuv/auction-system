@@ -42,7 +42,7 @@ int db_init(const char *db_name) {
                                    "owner TEXT,"
                                    "current_idx INTEGER,"
                                    "price INTEGER,"
-                                   "bidder_fd INTEGER,"
+                                   "bidder_name TEXT," // SỬA: bidder_fd INTEGER -> bidder_name TEXT de luu username
                                    "end_time INTEGER,"
                                    "is_active INTEGER,"
                                    "is_started INTEGER," 
@@ -56,7 +56,16 @@ int db_init(const char *db_name) {
                                  "start_price INTEGER,"
                                  "buy_now INTEGER,"
                                  "PRIMARY KEY (room_id, item_idx));";
-
+    const char *sql_default_admin = "INSERT OR IGNORE INTO users (username, password, role) VALUES ('admin', 'admin123', 3);";
+    
+    char *err_msg = NULL;
+    rc = sqlite3_exec(db, sql_default_admin, 0, 0, &err_msg);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "[DB Error] Khong the tao Admin mac dinh: %s\n", err_msg);
+        sqlite3_free(err_msg);
+    } else {
+        printf("[DB Info] Da kiem tra/khoi tao tai khoan Admin mac dinh (admin/admin123)\n");
+    }
     sqlite3_exec(db, sql_users, 0, 0, 0);
     sqlite3_exec(db, sql_history, 0, 0, 0);
     sqlite3_exec(db, sql_logs, 0, 0, 0);
@@ -180,12 +189,13 @@ char* db_get_history_json(const char *username, int role) {
 
 // --- QUẢN LÝ TRẠNG THÁI PHÒNG ĐỂ CHỐNG MẤT DỮ LIỆU KHI SERVER SẬP ---
 
-int db_update_room_state(int room_id, int current_item_idx, int current_price, int highest_bidder_id, long end_time) {
+// SỬA: Doi int highest_bidder_id thanh const char *bidder_name
+int db_update_room_state(int room_id, int current_item_idx, int current_price, const char *bidder_name, long end_time) {
     sqlite3_stmt *stmt;
     RoomState *r = &rooms[room_id - 1];
 
     // 1. Cap nhat thong tin co ban cua phong vao active_rooms
-    const char *sql_room = "INSERT OR REPLACE INTO active_rooms (id, owner, current_idx, price, bidder_fd, end_time, is_active, is_started, total_items) "
+    const char *sql_room = "INSERT OR REPLACE INTO active_rooms (id, owner, current_idx, price, bidder_name, end_time, is_active, is_started, total_items) "
                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
     
     if (sqlite3_prepare_v2(db, sql_room, -1, &stmt, 0) != SQLITE_OK) return -1;
@@ -193,7 +203,8 @@ int db_update_room_state(int room_id, int current_item_idx, int current_price, i
     sqlite3_bind_text(stmt, 2, r->owner_username, -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 3, current_item_idx);
     sqlite3_bind_int(stmt, 4, current_price);
-    sqlite3_bind_int(stmt, 5, highest_bidder_id);
+    // Bind text username thay vi bind fd
+    sqlite3_bind_text(stmt, 5, bidder_name ? bidder_name : "", -1, SQLITE_STATIC); 
     sqlite3_bind_int(stmt, 6, (int)end_time);
     sqlite3_bind_int(stmt, 7, r->is_active);
     sqlite3_bind_int(stmt, 8, r->is_started); 
@@ -226,8 +237,8 @@ int db_load_active_auctions(void *rooms_array) {
     RoomState *rooms_ptr = (RoomState *)rooms_array;
     sqlite3_stmt *res_rooms, *res_items;
     
-    // Truy van cac phong dang active
-    const char *sql_rooms = "SELECT id, owner, current_idx, price, end_time, is_active, is_started, total_items FROM active_rooms WHERE is_active = 1;";
+    // SỬA: Truy van them cot bidder_name de khoi phuc nguoi dang dan dau
+    const char *sql_rooms = "SELECT id, owner, current_idx, price, bidder_name, end_time, is_active, is_started, total_items FROM active_rooms WHERE is_active = 1;";
     if (sqlite3_prepare_v2(db, sql_rooms, -1, &res_rooms, 0) != SQLITE_OK) return -1;
     
     while (sqlite3_step(res_rooms) == SQLITE_ROW) {
@@ -240,11 +251,16 @@ int db_load_active_auctions(void *rooms_array) {
         strcpy(r->owner_username, (const char*)sqlite3_column_text(res_rooms, 1));
         r->current_item_idx = sqlite3_column_int(res_rooms, 2);
         r->current_price = sqlite3_column_int(res_rooms, 3);
-        r->highest_bidder_id = -1; // Reset FD vi socket fd cu khong con gia tri sau khi server sập
-        r->end_time = (time_t)sqlite3_column_int(res_rooms, 4);
-        r->is_active = sqlite3_column_int(res_rooms, 5);
-        r->is_started = sqlite3_column_int(res_rooms, 6); 
-        r->total_items = sqlite3_column_int(res_rooms, 7);
+        
+        // SỬA: Khoi phuc username nguoi thau tu DB thay vi reset ve -1
+        const char *b_name = (const char*)sqlite3_column_text(res_rooms, 4);
+        if (b_name) strncpy(r->highest_bidder_username, b_name, 49);
+        else r->highest_bidder_username[0] = '\0';
+
+        r->end_time = (time_t)sqlite3_column_int(res_rooms, 5);
+        r->is_active = sqlite3_column_int(res_rooms, 6);
+        r->is_started = sqlite3_column_int(res_rooms, 7); 
+        r->total_items = sqlite3_column_int(res_rooms, 8);
         r->sent_warning = 0;
 
         // Truy van va nap lai hang cho vat pham cua phong
