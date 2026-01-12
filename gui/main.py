@@ -14,7 +14,7 @@ class AuctionApp:
         self.root = root
         self.root.title("Hệ thống Đấu giá Trực tuyến")
         self.root.geometry("950x750")
-        
+
         # Trạng thái ứng dụng
         self.user_role = 0  # 1: Bidder, 2: Auctioneer, 3: Admin
         self.current_room_name = ""  # Lưu tên phòng hiện tại để hiển thị trong AuctionRoomFrame
@@ -45,8 +45,8 @@ class AuctionApp:
         toast = tk.Toplevel(self.root)
         toast.overrideredirect(True)
         toast.attributes("-topmost", True)
-        
-        lbl = tk.Label(toast, text=message, bg=bg, fg="white", 
+
+        lbl = tk.Label(toast, text=message, bg=bg, fg="white",
                        padx=25, pady=12, font=("Arial", 11, "bold"))
         lbl.pack()
 
@@ -54,10 +54,10 @@ class AuctionApp:
         main_x = self.root.winfo_x()
         main_y = self.root.winfo_y()
         main_width = self.root.winfo_width()
-        
+
         x = main_x + (main_width // 2) - (toast.winfo_width() // 2)
-        y = main_y + 100 
-        
+        y = main_y + 100
+
         toast.geometry(f"+{x}+{y}")
         self.root.after(duration, toast.destroy)
 
@@ -83,7 +83,7 @@ class AuctionApp:
 
         tk.Label(self.current_frame, text="HỆ THỐNG ĐẤU GIÁ", font=("Arial", 22, "bold"), fg="#1976D2").pack(pady=(0, 30))
         tk.Label(self.current_frame, text="ĐĂNG NHẬP", font=("Arial", 16, "bold")).pack(pady=10)
-        
+
         tk.Label(self.current_frame, text="Tên đăng nhập:").pack(anchor="w")
         self.ent_user = tk.Entry(self.current_frame, width=35, font=("Arial", 11))
         self.ent_user.pack(pady=5)
@@ -94,8 +94,8 @@ class AuctionApp:
 
         tk.Button(self.current_frame, text="ĐĂNG NHẬP", bg="#2196F3", fg="white",
                   font=("Arial", 11, "bold"), width=25, pady=8, command=self.login).pack(pady=25)
-        
-        tk.Button(self.current_frame, text="Chưa có tài khoản? Đăng ký ngay", 
+
+        tk.Button(self.current_frame, text="Chưa có tài khoản? Đăng ký ngay",
                   relief="flat", fg="#666", command=self.show_register_screen).pack()
 
     def show_register_screen(self):
@@ -104,7 +104,7 @@ class AuctionApp:
         self.current_frame.pack(expand=True)
 
         tk.Label(self.current_frame, text="ĐĂNG KÝ TÀI KHOẢN", font=("Arial", 18, "bold"), fg="#388E3C").pack(pady=30)
-        
+
         tk.Label(self.current_frame, text="Tên đăng nhập:").pack(anchor="w")
         self.ent_reg_user = tk.Entry(self.current_frame, width=35, font=("Arial", 11))
         self.ent_reg_user.pack(pady=5)
@@ -119,7 +119,7 @@ class AuctionApp:
 
         tk.Button(self.current_frame, text="ĐĂNG KÝ NGAY", bg="#4CAF50", fg="white",
                   font=("Arial", 11, "bold"), width=25, pady=8, command=self.register).pack(pady=25)
-        
+
         tk.Button(self.current_frame, text="Quay lại đăng nhập", relief="flat", fg="#666", command=self.show_login_screen).pack()
 
     def show_dashboard(self):
@@ -140,13 +140,13 @@ class AuctionApp:
         search_win.title("Kết quả tìm kiếm")
         search_win.geometry("700x450")
         search_win.grab_set()
-        
+
         tk.Label(search_win, text=f"Tìm thấy {len(results)} vật phẩm phù hợp", font=("Arial", 12, "bold"), pady=15).pack()
         cols = ("room", "title", "price", "status")
         tree = ttk.Treeview(search_win, columns=cols, show="headings")
         tree.heading("room", text="ID Phòng"); tree.heading("title", text="Tên vật phẩm")
         tree.heading("price", text="Giá khởi điểm"); tree.heading("status", text="Trạng thái")
-        
+
         for r in results:
             tree.insert("", "end", values=(r.get('room_id'), r.get('title'), f"{r.get('start_price', 0):,} VND", r.get('status')))
         tree.pack(fill="both", expand=True, padx=20, pady=10)
@@ -159,7 +159,7 @@ class AuctionApp:
         history_win.title("Lịch sử phiên đấu giá")
         history_win.geometry("850x500")
         history_win.grab_set()
-        
+
         tk.Label(history_win, text="LỊCH SỬ GIAO DỊCH", font=("Arial", 14, "bold"), pady=15).pack()
 
         cols = ("time", "item", "owner", "winner", "price")
@@ -186,7 +186,7 @@ class AuctionApp:
         cols = ("id", "username", "role")
         tree = ttk.Treeview(admin_win, columns=cols, show="headings")
         tree.heading("id", text="ID"); tree.heading("username", text="Username"); tree.heading("role", text="Role")
-        
+
         role_map = {1: "Bidder", 2: "Auctioneer", 3: "Admin"}
         for u in users: tree.insert("", "end", values=(u.get('id'), u.get('username'), role_map.get(u.get('role'), "N/A")))
         tree.pack(fill="both", expand=True, padx=20, pady=10)
@@ -233,7 +233,20 @@ class AuctionApp:
 
     def handle_server_response(self, data):
         msg_type = data.get("type")
-        
+        # --- XỬ LÝ KẾT NỐI MẠNG ---
+        if msg_type == 998: # LOST_CONNECTION
+            self.show_toast("⚠️ Mất kết nối! Đang thử lại...", duration=3000, bg="#FFA000")
+            self.root.title("Hệ thống Đấu giá (Đang mất kết nối...)")
+            return
+
+        if msg_type == 999: # RECONNECTED
+            self.show_toast("✅ Đã kết nối lại Server!", duration=2000, bg="#388E3C")
+            self.root.title("Hệ thống Đấu giá Trực tuyến")
+            # Vì Server C mới khởi động lại nên Session bị mất.
+            # Ta cần đưa người dùng về màn hình đăng nhập để họ vào lại.
+            self.show_login_screen()
+            messagebox.showinfo("Thông báo", "Kết nối đã được khôi phục.\nVui lòng đăng nhập lại.")
+            return
         if msg_type == 802: # Login Success
             self.user_role = data.get("role")
             self.show_dashboard()
@@ -242,7 +255,7 @@ class AuctionApp:
 
         elif msg_type == 801: # Error
             error_msg = data.get("message", "")
-            
+
             # LOGIC KICK OUT: Khi tài khoản đăng nhập ở nơi khác
             if error_msg == "Tai khoan da dang nhap o noi khac!":
                 messagebox.showwarning("Cảnh báo hệ thống", error_msg)
@@ -262,15 +275,15 @@ class AuctionApp:
                 return
             self.show_toast(msg_text, bg="#2E7D32")
 
-        elif msg_type == 810: 
+        elif msg_type == 810:
             if hasattr(self, 'dashboard_frame'): self.dashboard_frame.update_room_list(data.get("rooms", []))
         elif msg_type == 811: self.show_search_results(data.get("results", []))
-        elif msg_type == 812: 
+        elif msg_type == 812:
             history = data.get("history", [])
             if history: self.show_history_window(history)
             else: messagebox.showinfo("Thông báo", "Chưa có lịch sử giao dịch.")
         elif msg_type == 820: self.show_admin_user_management(data.get("users", []))
-        elif msg_type == 901: 
+        elif msg_type == 901:
             self.show_auction_room(data.get("room_id"))
             self.room_frame.update_auction_state(data)
         elif msg_type in [902, 903, 904, 905, 906, 907]:
