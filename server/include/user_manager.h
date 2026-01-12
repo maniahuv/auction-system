@@ -17,4 +17,8 @@ void broadcast_to_room(int room_id, char *json_message);
 
 UserState *get_user_by_username(const char *username);
 
+#include <sys/select.h> // Thêm thư viện này nếu chưa có
+void check_connection_timeouts(fd_set *master_set);
+
+void update_heartbeat(int fd);
 #endif

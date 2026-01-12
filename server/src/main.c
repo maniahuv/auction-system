@@ -1,7 +1,7 @@
 #include "server.h"
 #include "state.h"
 #include "handlers.h"
-#include "db_manager.h" 
+#include "db_manager.h"
 #include "user_manager.h"
 #include "auction_engine.h"
 
@@ -80,8 +80,8 @@ int main() {
     }
 
     // Goi logic kiem tra thoi gian dau gia tu module auction_engine
-    check_auctions(); 
-
+    check_auctions();
+    check_connection_timeouts(&master_set);
     if (activity == 0) {
       continue;
     }
@@ -105,7 +105,7 @@ int main() {
               fd_max = new_fd;
 
             // Khoi tao trang thai nguoi dung tu module user_manager
-            init_user(new_fd); 
+            init_user(new_fd);
           }
         } else {
           // Tu client
@@ -113,6 +113,7 @@ int main() {
           int recv_status = receive_message(i, &payload);
 
           if (recv_status == 0) {
+            update_heartbeat(i);
             printf("[Recv fd %d]: %s\n", i, payload);
 
             cJSON *json = parse_json(payload);
@@ -135,7 +136,7 @@ int main() {
           } else {
             printf("[Disconnect] Client fd %d disconnected\n", i);
             // Don dep trang thai nguoi dung tu module user_manager
-            clear_user(i); 
+            clear_user(i);
             close(i);
             FD_CLR(i, &master_set);
           }

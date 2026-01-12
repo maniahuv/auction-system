@@ -14,6 +14,7 @@ typedef struct {
   int role;
   int is_logged_in;
   int current_room_id; // -1 neu chua vao phong
+  time_t last_heartbeat; // Thoi diem nhan duoc tin hieu cuoi cung tu client
 } UserState;
 
 // Cau truc luu thong tin vat pham trong hang gio
@@ -28,12 +29,12 @@ typedef struct {
   int is_active;
   int is_started;
   char owner_username[50];
-  
+
   // --- QUAN LY HANG CHO ---
   AuctionItem queue[MAX_ITEMS_PER_ROOM]; // Danh sach cac vat pham dang cho dau gia
   int total_items;      // Tong so vat pham hien co
   int current_item_idx; // Chi so vat pham dang duoc dau gia (0 -> total_items-1)
-  
+
   // Trang thai dau gia hien tai (ap dung cho cac vat pham tai current_item_idx)
   int current_price;
   int highest_bidder_id; // ID (fd) cua nguoi tra gia cao nhat hien tai

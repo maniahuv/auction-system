@@ -4,6 +4,11 @@
 #include "room_manager.h"
 #include "json_util.h"
 #include "admin_handler.h"
+#include "stdio.h"
+char *handle_ping() {
+    printf("[Heartbeat] Received PING from client.\n");
+    return create_ok_response(); // Hoặc trả về message "PONG" tùy ý
+}
 
 // Xu ly tin nhan nhan tu client
 char *handle_client_message(int fd, cJSON *json) {
@@ -41,8 +46,9 @@ char *handle_client_message(int fd, cJSON *json) {
         case C2S_ADMIN_LIST_USERS:       return handle_admin_list_users(fd);
         case C2S_ADMIN_DELETE_USER:     return handle_admin_delete_user(fd, json);
         case C2S_ADMIN_UPDATE_USER_ROLE: return handle_admin_update_role(fd, json);
-
+        case C2S_PING:              return handle_ping();
         default:
             return create_error_response(ERR_UNKNOWN, "Unknown command");
     }
 }
+

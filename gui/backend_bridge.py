@@ -3,7 +3,7 @@ import threading
 import json
 import os
 import sys
-
+import time
 class AuctionBackend:
     def __init__(self, binary_path="../bin/clientd"):
         """
@@ -34,12 +34,14 @@ class AuctionBackend:
                 bufsize=1
             )
             self._is_running = True
-            
+
             # 3. Khởi chạy luồng đọc lỗi (stderr) từ C để debug
+            threading.Thread(target=self._heartbeat_loop, daemon=True).start()
             threading.Thread(target=self._read_stderr, daemon=True).start()
             print(f"Hệ thống: Đã khởi chạy Daemon kết nối tới {self.host}:{self.port}")
-            
+
         except Exception as e:
+
             print(f"LỖI khi khởi chạy Backend Daemon: {e}")
             sys.exit(1)
 
@@ -180,3 +182,16 @@ class AuctionBackend:
     def admin_update_role(self, user_id, new_role):
         """Admin: Thay đổi quyền người dùng (Mã 603)"""
         return self.send_command({"type": 603, "user_id": int(user_id), "new_role": int(new_role)})
+
+    def _heartbeat_loop(self):
+        """Tự động gửi Ping lên Server mỗi 10 giây để giữ kết nối."""
+        while self._is_running:
+            time.sleep(10) # Ngủ 10 giây
+            if self.process and self.process.poll() is None:
+                # Gửi lệnh PING (Type 701 - Xem lại protocol.h nếu bạn đã định nghĩa)
+                # Nếu chưa định nghĩa 701 trong Server, Server sẽ trả về lỗi "Unknown command"
+                # nhưng vẫn tính là "có hoạt động" và không disconnect bạn.
+                try:
+                    self.send_command({"type": 701})
+                except:
+                    pass

@@ -1,5 +1,5 @@
 # Biến (Variables)
-CC = gcc
+CC = clang
 # THAY ĐỔI: Thêm đường dẫn include của cJSON
 CFLAGS = -Wall -Wextra -g -I./include -I../third_party/cJSON
 
